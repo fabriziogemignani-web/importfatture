@@ -1,0 +1,63 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageHeader, Panel } from "@/components/common";
+import { api, fmtEUR } from "@/lib/api";
+
+export default function Anagrafiche() {
+  const [ruolo, setRuolo] = useState("cliente");
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api.get("/anagrafiche", { params: { ruolo, ...(q && { q }) } }).then((r) => setItems(r.data));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [ruolo, q]);
+
+  return (
+    <div>
+      <PageHeader eyebrow="Registro" title="Anagrafiche" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Tabs value={ruolo} onValueChange={setRuolo}>
+          <TabsList>
+            <TabsTrigger value="cliente" data-testid="tab-clienti">Clienti</TabsTrigger>
+            <TabsTrigger value="fornitore" data-testid="tab-fornitori">Fornitori</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="relative sm:w-80">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} className="bg-white pl-9" placeholder="Cerca ragione sociale, P.IVA, comune…" data-testid="anagrafiche-search-input" />
+        </div>
+      </div>
+      <Panel className="fade-up mt-5 overflow-x-auto">
+        {items.length === 0 ? (
+          <div className="p-10 text-center text-sm text-slate-500" data-testid="anagrafiche-empty">Nessuna anagrafica trovata.</div>
+        ) : (
+          <Table data-testid="anagrafiche-table">
+            <TableHeader><TableRow className="bg-slate-50">
+              <TableHead>Ragione sociale</TableHead><TableHead>P.IVA / CF</TableHead><TableHead>Comune</TableHead>
+              <TableHead className="text-right">Fatture</TableHead><TableHead className="text-right">Totale</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {items.map((a) => (
+                <TableRow key={a.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/anagrafiche/${a.id}`)} data-testid={`anagrafica-row-${a.id}`}>
+                  <TableCell className="font-medium">{a.denominazione}</TableCell>
+                  <TableCell className="font-mono text-xs">{a.chiave}</TableCell>
+                  <TableCell className="text-slate-600">{a.comune} {a.provincia && `(${a.provincia})`}</TableCell>
+                  <TableCell className="text-right tabular-nums">{a.n_fatture}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{fmtEUR(a.totale_fatture)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Panel>
+    </div>
+  );
+}

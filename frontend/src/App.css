@@ -1,0 +1,30 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap");
+
+body {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.font-mono, code, pre {
+  font-family: "JetBrains Mono", monospace;
+}
+
+.fade-up {
+  animation: fadeUp 0.45s ease both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.grid-bg {
+  background-image: linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+::selection {
+  background: #0f172a;
+  color: #fff;
+}

@@ -1,0 +1,174 @@
+{
+  "app_context": {
+    "name": "FatturaSmart XML - Gestione Fatturazione Elettronica",
+    "type": "dashboard / saas_app",
+    "language": "it",
+    "core_goal": "Software di lettura, catalogazione e consultazione visiva delle fatture elettroniche XML (Attive e Passive), organizzate per Anagrafica, anno e numero di protocollo, con supporto per il caricamento massivo (XML, ZIP, P7M)."
+  },
+  "design_archetype": {
+    "name": "Swiss High-Contrast Financial Tech",
+    "mood": "Preciso, istituzionale, ad alta leggibilità e privo di elementi superflui. Trasmette sicurezza contabile e chiarezza immediata dei dati finanziari.",
+    "theme": "Light theme primario con supporto Dark theme toggle. Base ardesia chiara / bianca con accenti cromatici funzionali (Verde Smeraldo per Fatture Attive, Indaco per Fatture Passive, Rosso per Destruttivo/Errori)."
+  },
+  "typography": {
+    "headline_font": "Plus Jakarta Sans, sans-serif",
+    "body_font": "Plus Jakarta Sans, sans-serif",
+    "code_mono_font": "JetBrains Mono, monospace",
+    "scale": {
+      "h1": "text-3xl sm:text-4xl font-bold tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl font-semibold tracking-tight",
+      "h4": "text-lg font-medium",
+      "body": "text-sm sm:text-base leading-relaxed text-slate-700 dark:text-slate-300",
+      "caption": "text-xs font-mono uppercase tracking-wider text-slate-500"
+    },
+    "forbidden_fonts": ["Inter for main headings", "Space Grotesk"]
+  },
+  "color_system": {
+    "light": {
+      "background": "#F8FAFC",
+      "surface": "#FFFFFF",
+      "surface_border": "#E2E8F0",
+      "text_primary": "#0F172A",
+      "text_secondary": "#64748B",
+      "primary_brand": "#0F172A",
+      "active_invoices_badge": "bg-emerald-50 text-emerald-700 border-emerald-200",
+      "passive_invoices_badge": "bg-indigo-50 text-indigo-700 border-indigo-200",
+      "accent_amber": "#D97706"
+    },
+    "dark": {
+      "background": "#090D16",
+      "surface": "#111827",
+      "surface_border": "#1F2937",
+      "text_primary": "#F9FAFB",
+      "text_secondary": "#9CA3AF",
+      "primary_brand": "#38BDF8",
+      "active_invoices_badge": "bg-emerald-950/60 text-emerald-400 border-emerald-800",
+      "passive_invoices_badge": "bg-indigo-950/60 text-indigo-400 border-indigo-800"
+    },
+    "forbidden_colors": ["#1B93A4", "#7351B7"]
+  },
+  "layout_and_structure": {
+    "sidebar": {
+      "style": "Vertical fixed sidebar with clear navigation links (Dashboard, Fatture Attive, Fatture Passive, Anagrafiche, Caricamento Massivo, Impostazioni P.IVA). Includes company P.IVA badge in header/footer.",
+      "padding": "p-4",
+      "active_state_class": "bg-slate-900 text-white font-medium shadow-sm dark:bg-slate-800"
+    },
+    "topbar": {
+      "style": "Sticky header with search bar (ricerca globale fatture/anagrafica), fiscal year quick selector pill, theme switcher, and 'Carica XML' primary CTA.",
+      "glassmorphic": "backdrop-blur-md bg-white/80 border-b border-slate-200 dark:bg-slate-900/80 dark:border-slate-800"
+    },
+    "bento_grid": {
+      "mode": "High Density Grid (MODE B)",
+      "gap": "gap-4 sm:gap-6",
+      "metrics_cards": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
+      "invoices_table_container": "bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden dark:bg-slate-900 dark:border-slate-800"
+    }
+  },
+  "key_features_and_views": {
+    "dashboard": {
+      "components": [
+        "Card riepilogo: Totale Fatture Attive (€ e conteggio)",
+        "Card riepilogo: Totale Fatture Passive (€ e conteggio)",
+        "Card riepilogo: Saldo/Differenza IVA stimata",
+        "Card riepilogo: Ultimi file XML caricati",
+        "Grafico mensile andamento Attive vs Passive (Recharts / Shadcn Chart)",
+        "Tabella ultime 5 fatture con ordinamento per Numero Protocollo"
+      ]
+    },
+    "fatture_attive_and_passive": {
+      "tabs": "Filtro Anno (es. 2026, 2025, 2024, Tutti) + Tab Tipo (Attive / Passive)",
+      "sorting": "Ordinamento predefinito per Numero di Protocollo (Numero Fattura) decrescente o crescente",
+      "search_and_filters": "Input di ricerca istantaneo (N. Protocollo, Cliente/Fornitore, P.IVA, Importo) + Filtro per Range di Date + Filtro IVA",
+      "actions": ["Visualizza Dettaglio Formattato (FatturaPA visualizer)", "Scarica XML originale", "Esporta selezione in CSV"]
+    },
+    "dettaglio_fattura_visualizer": {
+      "style": "Visualizzatore stile documento ufficiale (Ministero delle Finanze / SDI), diviso in sezioni pulite:",
+      "sections": [
+        "Intestazione: Cedente/Prestatore (Fornitore) vs Cessionario/Committente (Cliente) con P.IVA e Codice Fiscale",
+        "Dati Generale Documento: Tipo Documento (TD01, etc.), Numero Fattura/Protocollo, Data, Valuta",
+        "Tabella Righe Dettaglio: Descrizione, Quantità, Prezzo Unitario, Aliquota IVA %, Prezzo Totale",
+        "Riepilogo IVA e Imponibile (diviso per aliquote)",
+        "Dati di Pagamento (Modalità, IBAN, Scadenza, Importo)",
+        "Vista Raw XML toggleabile in sintassi evidenziata per sviluppatori/contabili"
+      ]
+    },
+    "anagrafiche": {
+      "sections": "Tab per Clienti e Fornitori",
+      "detail_drawer": "Dettaglio anagrafico con Ragione Sociale, P.IVA, Codice Fiscale, Indirizzo, PEC, Codice Destinatario SDI e lista storica di tutte le fatture collegate con totale fatturato."
+    },
+    "bulk_upload": {
+      "dropzone": "Area di trascinamento file accattivante per .xml, .xml.p7m, .zip",
+      "process_feedback": "Lista in tempo reale dei file analizzati: verde per fatture valide estratte, giallo per avvisi, rosso per errori di parsing XML.",
+      "summary_bar": "Riepilogo caricamento: X fatture estratte, Y clienti/fornitori aggiornati automaticamente."
+    },
+    "settings": {
+      "company_piva": "Configurazione della P.IVA dell'azienda utente usata per determinare automaticamente se una fattura è Attiva (l'azienda è Cedente) o Passiva (l'azienda è Cessionario)."
+    }
+  },
+  "component_strategy": {
+    "shadcn_components": [
+      "Table (con sorting ed header personalizzati)",
+      "Tabs & TabList (per filtro Anni e Attive/Passive)",
+      "Dialog / Sheet (per dettaglio visivo fattura ed anagrafica)",
+      "Select / DropdownMenu (per opzioni esportazione e filtri)",
+      "Badge (con colori dedicati per Attiva / Passiva / Stato caricamento)",
+      "Input / Search (con icona lente di ingrandimento e pulsante clear)",
+      "Sonner (per notifiche di upload completato ed esportazione CSV)"
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "key_icons": {
+        "active_invoice": "ArrowUpRight",
+        "passive_invoice": "ArrowDownLeft",
+        "upload": "UploadCloud",
+        "xml_file": "FileCode",
+        "search": "Search",
+        "filter": "Filter",
+        "export_csv": "Download",
+        "building": "Building2",
+        "protocol": "Hash"
+      }
+    }
+  },
+  "image_urls": {
+    "dashboard_hero_bg": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwxfHxmaW5hbmNpYWwlMjBjaGFydHMlMjBkYXNoYm9hcmQlMjBvZmZpY2UlMjBsYXB0b3AlMjBzcHJlYWRzaGVldHxlbnwwfHx8fDE3OTIwNjEyNzB8MA&ixlib=rb-4.1.0&q=85",
+    "laptop_analytics": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHszfHxmaW5hbmNpYWwlMjBjaGFydHMlMjBkYXNoYm9hcmQlMjBvZmZpY2UlMjBsYXB0b3AlMjBzcHJlYWRzaGVldHxlbnwwfHx8fDE3OTIwNjEyNzB8MA&ixlib=rb-4.1.0&q=85"
+  },
+  "motion_and_interactions": {
+    "transitions": "Use specific css transitions like `transition-colors duration-200` or `transition-opacity duration-150`",
+    "micro_interactions": [
+      "Hover su righe tabella con highlight tenue `hover:bg-slate-50 dark:hover:bg-slate-800/50`",
+      "Drag & drop zone pulses when dragging files over target",
+      "Modal slide-over (Sheet) per il dettaglio visivo della fattura"
+    ]
+  },
+  "testing_and_accessibility": {
+    "mandatory_rule": "Ogni elemento interattivo e chiave deve contenere l'attributo data-testid in formato kebab-case.",
+    "sample_test_ids": [
+      "data-testid='nav-dashboard'",
+      "data-testid='nav-fatture-attive'",
+      "data-testid='nav-fatture-passive'",
+      "data-testid='nav-anagrafica'",
+      "data-testid='nav-caricamento-massivo'",
+      "data-testid='nav-impostazioni'",
+      "data-testid='year-tab-2026'",
+      "data-testid='year-tab-tutti'",
+      "data-testid='search-invoices-input'",
+      "data-testid='invoice-row-protocol-1001'",
+      "data-testid='view-invoice-detail-button'",
+      "data-testid='export-csv-button'",
+      "data-testid='bulk-upload-dropzone'",
+      "data-testid='upload-submit-button'",
+      "data-testid='company-piva-input'"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Costruisci l'applicazione interamente in lingua Italiana, poiché destinata alla gestione delle Fatture Elettroniche (FatturaPA).",
+    "Implementa un parser client-side ed una gestione mock/storage locale per i file XML, ZIP e P7M caricati massivamente.",
+    "Fornisci fatture di esempio pre-caricate (sia attive che passive) per gli anni 2026, 2025 e 2024 ordinate per Numero Protocollo.",
+    "Assicurati che la vista visiva della fattura sia identica ad una scheda FatturaPA pulita ed elegante, leggibile anche per utenti non tecnici.",
+    "Abilita l'esportazione dei dati filtrati in formato CSV.",
+    "Inserisci data-testid su TUTTI i pulsanti, link, filtri, schede ed elementi tabella."
+  ]
+}
