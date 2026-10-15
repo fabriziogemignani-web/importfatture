@@ -1,0 +1,28 @@
+{
+  "summary": "End-to-end backend + frontend test of Fatture Elettroniche XML app. All 28 backend pytest tests pass (auth incl. brute-force lockout, settings VAT IT-prefix normalization, bulk upload XML/.p7m/.zip, duplicate detection, non-xml rejection, invoice list with natural sort 9/10/100, search, year filter, detail, XML download, CSV export semicolon/BOM, anagrafiche, stats, delete). Frontend UI smoke test confirms login/logout, protected nav, settings save (sidebar shows P.IVA 01234567890), bulk upload of 4 files -> 5 ok + 1 duplicate (lotto.zip contains dup p7m), year tabs 2025, natural sort rendering 9->10->100, search filter, invoice detail with toggle-xml/download-xml/delete buttons, raw XML pre visible, Anagrafiche clienti/fornitori tabs (1 each), CSV export button present. No critical issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts emits width(-1)/height(-1) console warning on initial render when stats are empty - cosmetic only, chart renders once data arrives"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py line 96/97: set_cookie uses secure=True + samesite='none' which is correct for cross-site HTTPS preview, but will NOT work on plain http://localhost:3000 dev. Document this or branch by env.",
+    "server.py uses deprecated @app.on_event('startup'/'shutdown'); migrate to lifespan context manager for FastAPI >=0.95.",
+    "upload_invoices processes files sequentially inside a single request; for large bulk (100s of files) consider streaming/async batching to avoid request timeouts.",
+    "No endpoint to delete an anagrafica (orphaned when all its invoices are deleted). Consider auto-cleanup or admin DELETE /api/anagrafiche/{id}.",
+    "No pagination on /api/anagrafiche (hard cap 2000) - fine for MVP, flag for scale."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (28/28)", "frontend": "100% core flows"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / FattureXML2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "No persistent seed. Test data (invoices, anagrafiche, settings, login_attempts) created during testing was cleaned up at end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests at /app/backend/tests/backend_test.py (28 tests, all pass). Run with: python -m pytest backend/tests/backend_test.py -v -o 'addopts=' (project pytest.ini enables xdist which causes race on shared login_attempts & invoice listing - disable addopts for stable results). Samples at /app/tests/samples (xml, .xml.p7m, lotto.zip). Admin credentials in /app/memory/test_credentials.md. Clean DB after tests: invoices/anagrafiche/settings/login_attempts collections.",
+  "rca of the issue": "N/A - no issues found"
+}
