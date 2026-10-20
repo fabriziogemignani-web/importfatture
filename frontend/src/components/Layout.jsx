@@ -19,7 +19,7 @@ const CompanyPicker = () => {
   const { user } = useAuth();
   const { companies, active, current, setActive } = useCompany();
   if (companies === null) return <div className="mt-4 h-12 animate-pulse rounded-lg bg-slate-100" data-testid="sidebar-company-loading" />;
-  if (user?.role !== "admin") {
+  if (user?.role !== "admin" && (companies || []).length <= 1) {
     return (
       <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" data-testid="sidebar-company">
         <div className="truncate text-sm font-semibold">{current?.company_name || "—"}</div>

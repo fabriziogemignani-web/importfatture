@@ -4,12 +4,43 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ChevronDown } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 
-const EMPTY = { email: "", name: "", role: "user", password: "", company_vat: "" };
+const EMPTY = { email: "", name: "", role: "user", password: "", company_vats: [] };
+
+export const VatMultiSelect = ({ value, onChange, testid, className = "" }) => {
+  const { companies } = useCompany();
+  const toggle = (vat) => onChange(value.includes(vat) ? value.filter((v) => v !== vat) : [...value, vat]);
+  const label = value.length === 0 ? "Nessuna" : value.length === 1
+    ? ((companies || []).find((c) => c.company_vat === value[0])?.company_name || value[0])
+    : `${value.length} P.IVA`;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className={`justify-between font-normal ${className}`} data-testid={testid}>
+          <span className="truncate">{label}</span><ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-2" align="start">
+        {(companies || []).length === 0 && <div className="p-2 text-sm text-slate-500">Nessuna P.IVA in archivio</div>}
+        {(companies || []).map((c) => (
+          <label key={c.company_vat} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-slate-50">
+            <Checkbox checked={value.includes(c.company_vat)} onCheckedChange={() => toggle(c.company_vat)} data-testid={`${testid}-option-${c.company_vat}`} />
+            <span className="min-w-0">
+              <span className="block truncate text-sm">{c.company_name || c.company_vat}</span>
+              <span className="block font-mono text-[10px] text-slate-500">{c.company_vat}</span>
+            </span>
+          </label>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 export const NewUserDialog = ({ open, onOpenChange, onSubmit }) => {
-  const { companies } = useCompany();
   const [form, setForm] = useState(EMPTY);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target ? e.target.value : e });
   const submit = async (e) => {
@@ -34,14 +65,8 @@ export const NewUserDialog = ({ open, onOpenChange, onSubmit }) => {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>P.IVA collegata {form.role === "admin" && "(facoltativa)"}</Label>
-            <Select value={form.company_vat || "__none__"} onValueChange={(v) => setForm({ ...form, company_vat: v === "__none__" ? "" : v })}>
-              <SelectTrigger data-testid="new-user-vat-select"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Seleziona…</SelectItem>
-                {(companies || []).map((c) => <SelectItem key={c.company_vat} value={c.company_vat} data-testid={`new-user-vat-option-${c.company_vat}`}>{c.company_name || c.company_vat} · {c.company_vat}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label>P.IVA collegate {form.role === "admin" && "(facoltative)"}</Label>
+            <VatMultiSelect value={form.company_vats} onChange={(company_vats) => setForm({ ...form, company_vats })} testid="new-user-vat-select" className="w-full" />
           </div>
           <div className="space-y-2"><Label>Password iniziale (min. 8 caratteri)</Label><Input type="password" required minLength={8} value={form.password} onChange={set("password")} data-testid="new-user-password-input" /></div>
           <DialogFooter><Button type="submit" data-testid="new-user-submit">Crea utente</Button></DialogFooter>

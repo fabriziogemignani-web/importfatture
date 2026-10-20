@@ -15,19 +15,19 @@ export const CompanyProvider = ({ children }) => {
   const [companies, setCompanies] = useState(null);
   const [active, setActiveState] = useState("");
 
+  const storageKey = `${KEY}:${user?.id}`;
   const setActive = (vat) => {
     applyHeader(vat);
-    localStorage.setItem(KEY, vat);
+    localStorage.setItem(storageKey, vat);
     setActiveState(vat);
   };
 
   const reload = useCallback(async () => {
+    applyHeader("");
     const { data } = await api.get("/companies");
-    const isAdmin = user?.role === "admin";
-    const saved = localStorage.getItem(KEY);
-    const pick = isAdmin
-      ? (data.find((c) => c.company_vat === saved) || data.find((c) => c.company_vat === user.company_vat) || data[0])
-      : data[0];
+    const saved = localStorage.getItem(`${KEY}:${user?.id}`);
+    const pick = data.find((c) => c.company_vat === saved)
+      || data.find((c) => (user?.company_vats || []).includes(c.company_vat)) || data[0];
     const vat = pick?.company_vat || "";
     applyHeader(vat);
     setActiveState(vat);

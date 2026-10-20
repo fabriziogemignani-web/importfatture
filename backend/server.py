@@ -89,14 +89,14 @@ class UserCreate(BaseModel):
     name: str = ""
     role: str = Field(default="user", pattern="^(admin|user)$")
     password: str = Field(min_length=8)
-    company_vat: str = ""
+    company_vats: List[str] = []
 
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
     active: Optional[bool] = None
-    company_vat: Optional[str] = None
+    company_vats: Optional[List[str]] = None
 
 
 class PasswordIn(BaseModel):
@@ -144,7 +144,7 @@ def set_auth_cookies(response: Response, user_id: str, email: str):
 
 def _public_user(u: dict) -> dict:
     return {"id": str(u["_id"]), "email": u["email"], "name": u.get("name", ""), "role": u.get("role", "user"),
-            "active": u.get("active", True), "company_vat": u.get("company_vat", ""), "created_at": u.get("created_at")}
+            "active": u.get("active", True), "company_vats": u.get("company_vats", []), "created_at": u.get("created_at")}
 
 
 async def get_current_user(request: Request) -> dict:
@@ -267,13 +267,13 @@ async def reset_password(body: ResetIn):
 
 
 # ---------- Users (admin) ----------
-async def _valid_user_vat(vat: str, role: str) -> str:
-    vat = norm_vat(vat)
-    if vat and not await db.companies.find_one({"_id": vat}):
+async def _valid_user_vats(vats: List[str], role: str) -> List[str]:
+    vats = list(dict.fromkeys(v for v in (norm_vat(x) for x in vats) if v))
+    if vats and await db.companies.count_documents({"_id": {"$in": vats}}) != len(vats):
         raise HTTPException(400, "P.IVA non presente in archivio: creala prima nelle Impostazioni")
-    if role == "user" and not vat:
-        raise HTTPException(400, "Un utente deve essere collegato a una P.IVA")
-    return vat
+    if role == "user" and not vats:
+        raise HTTPException(400, "Un utente deve essere collegato ad almeno una P.IVA")
+    return vats
 
 async def _other_active_admins(exclude_id: ObjectId) -> int:
     return await db.users.count_documents({"role": "admin", "active": {"$ne": False}, "_id": {"$ne": exclude_id}})
@@ -291,8 +291,8 @@ async def create_user(body: UserCreate, admin=Depends(require_admin)):
         raise HTTPException(400, "Email non valida")
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Esiste già un utente con questa email")
-    vat = await _valid_user_vat(body.company_vat, body.role)
-    doc = {"email": email, "name": body.name.strip(), "role": body.role, "active": True, "company_vat": vat,
+    vats = await _valid_user_vats(body.company_vats, body.role)
+    doc = {"email": email, "name": body.name.strip(), "role": body.role, "active": True, "company_vats": vats,
            "password_hash": hash_password(body.password), "created_at": datetime.now(timezone.utc)}
     res = await db.users.insert_one(doc)
     doc["_id"] = res.inserted_id
@@ -306,9 +306,9 @@ async def update_user(user_id: str, body: UserUpdate, admin=Depends(require_admi
     current = await db.users.find_one({"_id": oid})
     if not current:
         raise HTTPException(404, "Utente non trovato")
-    if "company_vat" in changes or "role" in changes:
-        changes["company_vat"] = await _valid_user_vat(changes.get("company_vat", current.get("company_vat", "")),
-                                                       changes.get("role", current.get("role", "user")))
+    if "company_vats" in changes or "role" in changes:
+        changes["company_vats"] = await _valid_user_vats(changes.get("company_vats", current.get("company_vats", [])),
+                                                         changes.get("role", current.get("role", "user")))
     demoting = changes.get("role") == "user" or changes.get("active") is False
     if demoting and user_id == admin["id"]:
         raise HTTPException(400, "Non puoi rimuovere i tuoi permessi di amministratore")
@@ -348,12 +348,16 @@ def norm_vat(v: str) -> str:
 
 
 async def get_tenant(request: Request, user=Depends(get_current_user)) -> str:
+    header = norm_vat(request.headers.get("X-Company-Vat", ""))
     if user["role"] == "admin":
-        vat = norm_vat(request.headers.get("X-Company-Vat", "")) or user.get("company_vat") or ""
+        vat = header or next(iter(user["company_vats"]), "")
         if not vat or not await db.companies.find_one({"_id": vat}):
             raise HTTPException(400, "Seleziona una P.IVA valida")
         return vat
-    vat = user.get("company_vat") or ""
+    allowed = user["company_vats"]
+    if header and header not in allowed:
+        raise HTTPException(403, "Non hai accesso a questa P.IVA")
+    vat = header or next(iter(allowed), "")
     if not vat or not await db.companies.find_one({"_id": vat}):
         raise HTTPException(403, "Nessuna P.IVA associata al tuo account. Contatta l'amministratore.")
     return vat
@@ -365,7 +369,7 @@ def _company(c: dict) -> dict:
 
 @api.get("/companies")
 async def list_companies(user=Depends(get_current_user)):
-    query = {} if user["role"] == "admin" else {"_id": user.get("company_vat") or "__none__"}
+    query = {} if user["role"] == "admin" else {"_id": {"$in": user["company_vats"]}}
     return [_company(c) async for c in db.companies.find(query).sort("name", ASCENDING)]
 
 
@@ -392,7 +396,7 @@ async def rename_company(vat: str, body: SettingsIn, admin=Depends(require_admin
 @api.delete("/companies/{vat}")
 async def delete_company(vat: str, admin=Depends(require_admin)):
     vat = norm_vat(vat)
-    if await db.invoices.count_documents({"company_vat": vat}, limit=1) or await db.users.count_documents({"company_vat": vat}, limit=1):
+    if await db.invoices.count_documents({"company_vat": vat}, limit=1) or await db.users.count_documents({"company_vats": vat}, limit=1):
         raise HTTPException(400, "Impossibile eliminare: ci sono fatture o utenti collegati a questa P.IVA")
     res = await db.companies.delete_one({"_id": vat})
     if not res.deleted_count:
@@ -661,7 +665,12 @@ async def startup():
     await db.invoices.create_index([("company_vat", 1), ("tipo", 1), ("anno", -1), ("numero_key", 1)])
     await db.invoices.create_index([("company_vat", 1), ("controparte_id", 1)])
     await db.anagrafiche.create_index([("company_vat", 1), ("chiave", 1)], unique=True)
-    await db.users.create_index("company_vat")
+    async for u in db.users.find({"company_vat": {"$exists": True}}):
+        vats = u.get("company_vats") or ([u["company_vat"]] if u.get("company_vat") else [])
+        await db.users.update_one({"_id": u["_id"]}, {"$set": {"company_vats": vats}, "$unset": {"company_vat": ""}})
+    if "company_vat_1" in await db.users.index_information():
+        await db.users.drop_index("company_vat_1")
+    await db.users.create_index("company_vats")
     email = os.environ["ADMIN_EMAIL"].lower()
     pwd = os.environ["ADMIN_PASSWORD"]
     existing = await db.users.find_one({"email": email})

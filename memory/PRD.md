@@ -34,6 +34,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Anagrafiche: etichette anno, riepilogo n. anagrafiche/documenti/importo totale, conteggi per anno e per tipo (clienti=attive, fornitori=passive)
 - Anagrafiche: ordinamento cliccando le intestazioni (ragione sociale, documenti, importo; asc/desc)
 - Multi-P.IVA: ogni utente collegato a una P.IVA (companies), vede solo i dati della sua P.IVA; admin vede tutte con selettore in sidebar; fatture senza la P.IVA come cedente/cessionario scartate; indici unici per (company_vat, dedup_key) e (company_vat, chiave)
+- Utenti collegabili a più P.IVA (company_vats) con selettore in sidebar; header non autorizzato -> 403; migrazione automatica company_vat -> company_vats
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
