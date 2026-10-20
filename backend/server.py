@@ -439,6 +439,21 @@ async def split_anagrafiche() -> None:
                 {"$set": {"controparte_id": str(new_id)}})
 
 
+async def dedup_anagrafiche() -> None:
+    """Collapse duplicate (company_vat, ruolo, chiave) records before building the unique index."""
+    groups = db.anagrafiche.aggregate([
+        {"$group": {"_id": {"v": "$company_vat", "r": "$ruolo", "c": "$chiave"}, "ids": {"$push": "$_id"}, "n": {"$sum": 1}}},
+        {"$match": {"n": {"$gt": 1}}},
+    ])
+    async for g in groups:
+        keep, *dupes = sorted(g["ids"])
+        await db.invoices.update_many(
+            {"company_vat": g["_id"]["v"], "controparte_id": {"$in": [str(d) for d in dupes]}},
+            {"$set": {"controparte_id": str(keep)}})
+        await db.anagrafiche.delete_many({"_id": {"$in": dupes}})
+        logger.info(f"Merged {len(dupes)} duplicate anagrafiche into {keep}")
+
+
 async def store_invoice(inv: dict, raw_xml: str, filename: str, company_vat: str) -> dict:
     ced, ces = inv["cedente"], inv["cessionario"]
     is_attiva = company_vat in (norm_vat(ced.get("piva")), (ced.get("codice_fiscale") or "").upper())
@@ -687,6 +702,7 @@ async def startup():
     await db.invoices.create_index([("company_vat", 1), ("tipo", 1), ("anno", -1), ("numero_key", 1)])
     await db.invoices.create_index([("company_vat", 1), ("controparte_id", 1)])
     await split_anagrafiche()
+    await dedup_anagrafiche()
     await db.anagrafiche.create_index([("company_vat", 1), ("ruolo", 1), ("chiave", 1)], unique=True)
     async for u in db.users.find({"company_vat": {"$exists": True}}):
         vats = u.get("company_vats") or ([u["company_vat"]] if u.get("company_vat") else [])
