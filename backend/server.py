@@ -415,11 +415,12 @@ async def upsert_anagrafica(party: dict, ruolo: str, company_vat: str) -> Option
     fields["updated_at"] = datetime.now(timezone.utc)
     fields["ruolo"] = ruolo
     fields["ruoli"] = [ruolo]
-    doc = await db.anagrafiche.find_one_and_update(
-        {"company_vat": company_vat, "ruolo": ruolo, "chiave": chiave},
-        {"$set": fields, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
-        upsert=True, return_document=True,
-    )
+    query = {"company_vat": company_vat, "ruolo": ruolo, "chiave": chiave}
+    update = {"$set": fields, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}}
+    try:
+        doc = await db.anagrafiche.find_one_and_update(query, update, upsert=True, return_document=True)
+    except DuplicateKeyError:
+        doc = await db.anagrafiche.find_one_and_update(query, update, return_document=True)
     return str(doc["_id"])
 
 
@@ -581,9 +582,12 @@ async def get_invoice_xml(invoice_id: str, vat=Depends(get_tenant)):
 
 @api.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, vat=Depends(get_tenant)):
-    res = await db.invoices.delete_one({"_id": _oid(invoice_id), "company_vat": vat})
-    if not res.deleted_count:
+    d = await db.invoices.find_one_and_delete({"_id": _oid(invoice_id), "company_vat": vat}, {"controparte_id": 1})
+    if not d:
         raise HTTPException(404, "Fattura non trovata")
+    cid = d.get("controparte_id")
+    if cid and not await db.invoices.count_documents({"company_vat": vat, "controparte_id": cid}, limit=1):
+        await db.anagrafiche.delete_one({"_id": ObjectId(cid), "company_vat": vat})
     return {"ok": True}
 
 

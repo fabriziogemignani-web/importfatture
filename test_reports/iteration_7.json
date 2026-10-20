@@ -1,0 +1,24 @@
+{
+  "summary": "Tested the split of anagrafiche by role. When a counterpart (05555555555) is both cliente and fornitore for company 01234567890, it now gets 2 separate records with different ids (ruolo=cliente / ruolo=fornitore, ruoli=[ruolo]). Each record has only its own invoices, totals and CSV export. Uploading more invoices for the same counterpart updates the existing record of the right role and creates no duplicates. Each invoice's controparte_id points to the right record, dashboard stat shows 1/1, and P.IVA isolation holds. The unique index (company_vat, ruolo, chiave) exists. UI: the Clienti and Fornitori tabs show different rows, the detail page shows a static role badge and no role-switch buttons, totals and invoice table filter by tipo, and the invoice-detail counterpart link opens the card of the right role. Backend 9/9 new tests passed; regression 60 passed, 2 skipped when each file is run on its own. DB cleaned (admin only).",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "DELETE /api/invoices/{id}", "issue": "Deleting the last invoice of a counterpart leaves an orphan anagrafica record with n_fatture=0, which still counts in the dashboard (pre-existing behaviour)."},
+    {"endpoint": "upsert_anagrafica", "issue": "Two uploads at the same moment for a new counterpart could hit DuplicateKeyError on the upsert, because of the unique index. Not caught; the upload would return 500. Edge case."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_split_anagrafiche.py", "/app/test_reports/pytest/pytest_split.xml"],
+  "action_items": [
+    "Optional: catch DuplicateKeyError in upsert_anagrafica and retry find_one",
+    "Optional: decide on orphan anagrafiche after invoice deletion (hide n_fatture=0 or delete)",
+    "Test-suite note: test files share VAT 01234567890 and test_multitenant cleanup removes all companies, so running tests/ with xdist (pytest.ini -n) causes failures between files. Run each file separately, or set pytest.ini to run in one process."
+  ],
+  "critical_code_review_comments": [
+    "list_anagrafiche and stats filter on 'ruoli' rather than 'ruolo'. This works now because ruoli=[ruolo], but filtering on 'ruolo' would be cleaner and would use the new index.",
+    "The '?ruolo=' query param in anagrafica links is no longer used by AnagraficaDetail (harmless)."
+  ],
+  "updated_files": ["/app/backend/tests/test_split_anagrafiche.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Used tests/seed_dual_role.py seed/cleanup; all TEST data removed",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run each test file separately (python -m pytest tests/<file> -n 0) because of shared-VAT cross-file interference under xdist. seed_dual_role.py needs backend/.env and frontend/.env exported."
+}

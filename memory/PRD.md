@@ -37,6 +37,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Utenti collegabili a più P.IVA (company_vats) con selettore in sidebar; header non autorizzato -> 403; migrazione automatica company_vat -> company_vats
 - Code review fixes: test secrets from env, parse_fattura split in sub-functions + type hints, stable React keys, Upload results component
 - Fix dettaglio anagrafica: mostra solo fatture e totali del ruolo selezionato (fornitore=passive, cliente=attive) con switch ruolo se entrambi; export CSV filtrato
+- Anagrafiche separate per ruolo: un'azienda che è sia cliente sia fornitore ha due schede distinte (indice unico company_vat+ruolo+chiave); migrazione automatica all'avvio che divide le schede unite e riassegna le fatture
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
