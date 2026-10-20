@@ -39,6 +39,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Fix dettaglio anagrafica: mostra solo fatture e totali del ruolo selezionato (fornitore=passive, cliente=attive) con switch ruolo se entrambi; export CSV filtrato
 - Anagrafiche separate per ruolo: un'azienda che è sia cliente sia fornitore ha due schede distinte (indice unico company_vat+ruolo+chiave); migrazione automatica all'avvio che divide le schede unite e riassegna le fatture
 - Fix deploy: dedup_anagrafiche() all'avvio unisce schede duplicate (company_vat, ruolo, chiave) e riassegna le fatture prima di creare l'indice unico
+- Avvio robusto: se l'indice unico anagrafiche fallisce, ripete il dedup e in ultima istanza registra l'errore senza bloccare l'avvio
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
