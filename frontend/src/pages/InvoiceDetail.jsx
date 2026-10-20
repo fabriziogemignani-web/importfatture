@@ -34,7 +34,7 @@ const Lines = ({ inv }) => (
       </TableRow></TableHeader>
       <TableBody>
         {inv.righe.map((r, i) => (
-          <TableRow key={i}>
+          <TableRow key={`riga-${r.numero_linea || i}`}>
             <TableCell className="font-mono text-xs">{r.numero_linea}</TableCell>
             <TableCell className="max-w-md">{r.descrizione}</TableCell>
             <TableCell className="text-right tabular-nums">{r.quantita} {r.unita_misura}</TableCell>
@@ -52,8 +52,8 @@ const Summary = ({ inv }) => (
   <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
     <Panel className="p-5" data-testid="invoice-vat-summary">
       <div className="mb-3 text-sm font-semibold">Riepilogo IVA</div>
-      {inv.riepilogo.map((r, i) => (
-        <div key={i} className="flex justify-between border-b border-dashed border-slate-200 py-2 text-sm">
+      {inv.riepilogo.map((r) => (
+        <div key={`iva-${r.aliquota_iva}-${r.natura}`} className="flex justify-between border-b border-dashed border-slate-200 py-2 text-sm">
           <span>{r.natura ? `Natura ${r.natura}` : `Aliquota ${r.aliquota_iva}%`}</span>
           <span className="tabular-nums">{fmtEUR(r.imponibile, inv.divisa)} + IVA {fmtEUR(r.imposta, inv.divisa)}</span>
         </div>
@@ -66,7 +66,7 @@ const Summary = ({ inv }) => (
       <div className="mb-3 text-sm font-semibold">Pagamento</div>
       {inv.pagamenti.length === 0 && <div className="text-sm text-slate-500">Nessun dato di pagamento.</div>}
       {inv.pagamenti.map((p, i) => (
-        <dl key={i} className="grid grid-cols-[110px_1fr] gap-y-1 border-b border-dashed border-slate-200 py-2 text-sm last:border-0">
+        <dl key={`pag-${p.scadenza}-${p.importo}-${i}`} className="grid grid-cols-[110px_1fr] gap-y-1 border-b border-dashed border-slate-200 py-2 text-sm last:border-0">
           <dt className="text-slate-500">Modalità</dt><dd className="font-mono">{p.modalita} {p.condizioni && `· ${p.condizioni}`}</dd>
           {p.scadenza && <><dt className="text-slate-500">Scadenza</dt><dd>{fmtDate(p.scadenza)}</dd></>}
           <dt className="text-slate-500">Importo</dt><dd className="tabular-nums">{fmtEUR(p.importo, inv.divisa)}</dd>

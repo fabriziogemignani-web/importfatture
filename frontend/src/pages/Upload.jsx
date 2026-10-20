@@ -40,6 +40,31 @@ const ICON = {
   error: <XCircle className="h-4 w-4 text-red-600" />,
 };
 
+const ResultsPanel = ({ results }) => {
+  const count = (s) => results.filter((r) => r.status === s).length;
+  return (
+    <Panel className="mt-6 overflow-hidden" data-testid="upload-results">
+      <div className="flex flex-wrap gap-4 border-b border-slate-200 p-4 text-sm" data-testid="upload-summary">
+        <span className="text-emerald-700"><b data-testid="upload-count-ok">{count("ok")}</b> importate</span>
+        <span className="text-amber-700"><b data-testid="upload-count-duplicate">{count("duplicate")}</b> duplicate</span>
+        <span className="text-red-700"><b data-testid="upload-count-error">{count("error")}</b> errori</span>
+      </div>
+      <ul className="max-h-[50vh] divide-y divide-slate-100 overflow-auto">
+        {results.map((r, i) => (
+          <li key={`${r.filename}-${r.numero || ""}-${i}`} className="flex items-center gap-3 px-4 py-2.5 text-sm" data-testid={`upload-result-${i}`}>
+            {ICON[r.status]}
+            <span className="min-w-0 flex-1 truncate font-mono text-xs">{r.filename}</span>
+            {r.tipo && <TipoBadge tipo={r.tipo} />}
+            {r.numero && <span className="font-mono text-xs">N. {r.numero}</span>}
+            <span className="hidden text-xs text-slate-500 sm:inline">{r.message}</span>
+            {r.id && <Link to={`/fatture/${r.id}`} className="text-xs font-semibold underline">Apri</Link>}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+};
+
 export default function Upload() {
   const input = useRef(null);
   const folderInput = useRef(null);
@@ -75,8 +100,6 @@ export default function Upload() {
     if (folderInput.current) folderInput.current.value = "";
   };
 
-  const count = (s) => results.filter((r) => r.status === s).length;
-
   return (
     <div>
       <PageHeader eyebrow="Importazione massiva" title="Carica fatture">
@@ -102,27 +125,7 @@ export default function Upload() {
       </div>
       {info && <div className="mt-4 text-sm text-slate-600" data-testid="upload-info">{info}</div>}
       {progress !== null && <div className="mt-5" data-testid="upload-progress"><Progress value={progress} /><div className="mt-1 text-xs text-slate-500">Elaborazione… {progress}%</div></div>}
-      {results.length > 0 && (
-        <Panel className="mt-6 overflow-hidden" data-testid="upload-results">
-          <div className="flex flex-wrap gap-4 border-b border-slate-200 p-4 text-sm" data-testid="upload-summary">
-            <span className="text-emerald-700"><b data-testid="upload-count-ok">{count("ok")}</b> importate</span>
-            <span className="text-amber-700"><b data-testid="upload-count-duplicate">{count("duplicate")}</b> duplicate</span>
-            <span className="text-red-700"><b data-testid="upload-count-error">{count("error")}</b> errori</span>
-          </div>
-          <ul className="max-h-[50vh] divide-y divide-slate-100 overflow-auto">
-            {results.map((r, i) => (
-              <li key={i} className="flex items-center gap-3 px-4 py-2.5 text-sm" data-testid={`upload-result-${i}`}>
-                {ICON[r.status]}
-                <span className="min-w-0 flex-1 truncate font-mono text-xs">{r.filename}</span>
-                {r.tipo && <TipoBadge tipo={r.tipo} />}
-                {r.numero && <span className="font-mono text-xs">N. {r.numero}</span>}
-                <span className="hidden text-xs text-slate-500 sm:inline">{r.message}</span>
-                {r.id && <Link to={`/fatture/${r.id}`} className="text-xs font-semibold underline">Apri</Link>}
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
+      {results.length > 0 && <ResultsPanel results={results} />}
     </div>
   );
 }

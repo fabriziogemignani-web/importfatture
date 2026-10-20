@@ -1,6 +1,10 @@
 """Seed/cleanup helper for multi-P.IVA UI tests. Usage: python seed_multivat_ui.py seed|clean"""
+import os
 import sys
 import requests
+from dotenv import load_dotenv
+
+load_dotenv("/app/backend/.env")
 
 with open("/app/frontend/.env") as f:
     BASE = [l.split("=", 1)[1].strip() for l in f if l.startswith("REACT_APP_BACKEND_URL=")][0].rstrip("/")
@@ -12,7 +16,7 @@ PWD = "TestPass123!"
 
 def adm():
     s = requests.Session()
-    assert s.post(f"{API}/auth/login", json={"email": "fabrizio.gemignani@gmail.com", "password": "FattureXML2026"}).status_code == 200
+    assert s.post(f"{API}/auth/login", json={"email": os.environ["ADMIN_EMAIL"], "password": os.environ["ADMIN_PASSWORD"]}).status_code == 200
     return s
 
 

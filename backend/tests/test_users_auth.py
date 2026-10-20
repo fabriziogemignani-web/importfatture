@@ -15,8 +15,11 @@ with open("/app/frontend/.env") as f:
         if line.startswith("REACT_APP_BACKEND_URL="):
             BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
 API = f"{BASE_URL}/api"
-ADMIN_EMAIL = "fabrizio.gemignani@gmail.com"
-ADMIN_PASSWORD = "FattureXML2026"
+from dotenv import load_dotenv
+
+load_dotenv("/app/backend/.env")
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 RESEND_EMAIL = "delivered@resend.dev"
 
 _env = {}
