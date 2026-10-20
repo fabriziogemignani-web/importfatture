@@ -10,6 +10,23 @@ import { PageHeader, Panel } from "@/components/common";
 import { NewUserDialog, PasswordDialog } from "@/components/UserDialogs";
 import { useAuth } from "@/context/AuthContext";
 import { api, formatApiError } from "@/lib/api";
+import { useCompany } from "@/context/CompanyContext";
+
+const NONE = "__none__";
+
+const VatSelect = ({ value, onChange, testid, allowNone }) => {
+  const { companies } = useCompany();
+  return (
+    <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
+      <SelectTrigger className="h-8 w-52" data-testid={testid}><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {allowNone && <SelectItem value={NONE}>Nessuna</SelectItem>}
+        {(companies || []).map((c) => <SelectItem key={c.company_vat} value={c.company_vat}>{c.company_name || c.company_vat} · {c.company_vat}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+};
+export { VatSelect };
 
 export default function Users() {
   const { user: me } = useAuth();
@@ -46,13 +63,14 @@ export default function Users() {
       <Panel className="fade-up overflow-x-auto">
         <Table data-testid="users-table">
           <TableHeader><TableRow className="bg-slate-50">
-            <TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Ruolo</TableHead><TableHead>Attivo</TableHead><TableHead className="text-right">Azioni</TableHead>
+            <TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>P.IVA</TableHead><TableHead>Ruolo</TableHead><TableHead>Attivo</TableHead><TableHead className="text-right">Azioni</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {users.map((u) => (
               <TableRow key={u.id} data-testid={`user-row-${u.email}`}>
                 <TableCell className="font-medium">{u.name || "—"} {u.id === me?.id && <span className="ml-1 text-xs text-slate-400">(tu)</span>}</TableCell>
                 <TableCell className="font-mono text-xs">{u.email}</TableCell>
+                <TableCell><VatSelect value={u.company_vat} allowNone={u.role === "admin"} onChange={(company_vat) => update(u, { company_vat })} testid={`user-vat-select-${u.email}`} /></TableCell>
                 <TableCell>
                   <Select value={u.role} onValueChange={(role) => update(u, { role })} disabled={u.id === me?.id}>
                     <SelectTrigger className="h-8 w-40" data-testid={`user-role-select-${u.email}`}><SelectValue /></SelectTrigger>

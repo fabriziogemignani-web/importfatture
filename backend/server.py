@@ -88,12 +88,14 @@ class UserCreate(BaseModel):
     name: str = ""
     role: str = Field(default="user", pattern="^(admin|user)$")
     password: str = Field(min_length=8)
+    company_vat: str = ""
 
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
     active: Optional[bool] = None
+    company_vat: Optional[str] = None
 
 
 class PasswordIn(BaseModel):
@@ -101,7 +103,7 @@ class PasswordIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
-    company_vat: str
+    company_vat: str = ""
     company_name: str = ""
 
 
@@ -141,7 +143,7 @@ def set_auth_cookies(response: Response, user_id: str, email: str):
 
 def _public_user(u: dict) -> dict:
     return {"id": str(u["_id"]), "email": u["email"], "name": u.get("name", ""), "role": u.get("role", "user"),
-            "active": u.get("active", True), "created_at": u.get("created_at")}
+            "active": u.get("active", True), "company_vat": u.get("company_vat", ""), "created_at": u.get("created_at")}
 
 
 async def get_current_user(request: Request) -> dict:
@@ -264,6 +266,14 @@ async def reset_password(body: ResetIn):
 
 
 # ---------- Users (admin) ----------
+async def _valid_user_vat(vat: str, role: str) -> str:
+    vat = norm_vat(vat)
+    if vat and not await db.companies.find_one({"_id": vat}):
+        raise HTTPException(400, "P.IVA non presente in archivio: creala prima nelle Impostazioni")
+    if role == "user" and not vat:
+        raise HTTPException(400, "Un utente deve essere collegato a una P.IVA")
+    return vat
+
 async def _other_active_admins(exclude_id: ObjectId) -> int:
     return await db.users.count_documents({"role": "admin", "active": {"$ne": False}, "_id": {"$ne": exclude_id}})
 
@@ -280,7 +290,8 @@ async def create_user(body: UserCreate, admin=Depends(require_admin)):
         raise HTTPException(400, "Email non valida")
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Esiste già un utente con questa email")
-    doc = {"email": email, "name": body.name.strip(), "role": body.role, "active": True,
+    vat = await _valid_user_vat(body.company_vat, body.role)
+    doc = {"email": email, "name": body.name.strip(), "role": body.role, "active": True, "company_vat": vat,
            "password_hash": hash_password(body.password), "created_at": datetime.now(timezone.utc)}
     res = await db.users.insert_one(doc)
     doc["_id"] = res.inserted_id
@@ -291,6 +302,12 @@ async def create_user(body: UserCreate, admin=Depends(require_admin)):
 async def update_user(user_id: str, body: UserUpdate, admin=Depends(require_admin)):
     oid = _oid(user_id)
     changes = body.model_dump(exclude_none=True)
+    current = await db.users.find_one({"_id": oid})
+    if not current:
+        raise HTTPException(404, "Utente non trovato")
+    if "company_vat" in changes or "role" in changes:
+        changes["company_vat"] = await _valid_user_vat(changes.get("company_vat", current.get("company_vat", "")),
+                                                       changes.get("role", current.get("role", "user")))
     demoting = changes.get("role") == "user" or changes.get("active") is False
     if demoting and user_id == admin["id"]:
         raise HTTPException(400, "Non puoi rimuovere i tuoi permessi di amministratore")
@@ -329,27 +346,62 @@ def norm_vat(v: str) -> str:
     return v[2:] if re.match(r"^[A-Z]{2}\d", v) else v
 
 
-async def get_settings() -> dict:
-    s = await db.settings.find_one({"_id": "company"}) or {}
-    return {"company_vat": s.get("company_vat", ""), "company_name": s.get("company_name", "")}
+async def get_tenant(request: Request, user=Depends(get_current_user)) -> str:
+    if user["role"] == "admin":
+        vat = norm_vat(request.headers.get("X-Company-Vat", "")) or user.get("company_vat") or ""
+        if not vat or not await db.companies.find_one({"_id": vat}):
+            raise HTTPException(400, "Seleziona una P.IVA valida")
+        return vat
+    vat = user.get("company_vat") or ""
+    if not vat or not await db.companies.find_one({"_id": vat}):
+        raise HTTPException(403, "Nessuna P.IVA associata al tuo account. Contatta l'amministratore.")
+    return vat
 
 
-@api.get("/settings")
-async def read_settings(user=Depends(get_current_user)):
-    return await get_settings()
+def _company(c: dict) -> dict:
+    return {"company_vat": c["_id"], "company_name": c.get("name", "")}
 
 
-@api.put("/settings")
-async def update_settings(body: SettingsIn, user=Depends(require_admin)):
+@api.get("/companies")
+async def list_companies(user=Depends(get_current_user)):
+    query = {} if user["role"] == "admin" else {"_id": user.get("company_vat") or "__none__"}
+    return [_company(c) async for c in db.companies.find(query).sort("name", ASCENDING)]
+
+
+@api.post("/companies")
+async def create_company(body: SettingsIn, admin=Depends(require_admin)):
     vat = norm_vat(body.company_vat)
-    if not vat:
+    if not re.match(r"^[A-Z0-9]{8,16}$", vat):
         raise HTTPException(400, "Inserisci una P.IVA valida")
-    await db.settings.update_one({"_id": "company"}, {"$set": {"company_vat": vat, "company_name": body.company_name.strip()}}, upsert=True)
-    return await get_settings()
+    if await db.companies.find_one({"_id": vat}):
+        raise HTTPException(400, "P.IVA già presente")
+    doc = {"_id": vat, "name": body.company_name.strip(), "created_at": datetime.now(timezone.utc)}
+    await db.companies.insert_one(doc)
+    return _company(doc)
+
+
+@api.patch("/companies/{vat}")
+async def rename_company(vat: str, body: SettingsIn, admin=Depends(require_admin)):
+    c = await db.companies.find_one_and_update({"_id": norm_vat(vat)}, {"$set": {"name": body.company_name.strip()}}, return_document=True)
+    if not c:
+        raise HTTPException(404, "P.IVA non trovata")
+    return _company(c)
+
+
+@api.delete("/companies/{vat}")
+async def delete_company(vat: str, admin=Depends(require_admin)):
+    vat = norm_vat(vat)
+    if await db.invoices.count_documents({"company_vat": vat}, limit=1) or await db.users.count_documents({"company_vat": vat}, limit=1):
+        raise HTTPException(400, "Impossibile eliminare: ci sono fatture o utenti collegati a questa P.IVA")
+    res = await db.companies.delete_one({"_id": vat})
+    if not res.deleted_count:
+        raise HTTPException(404, "P.IVA non trovata")
+    await db.anagrafiche.delete_many({"company_vat": vat})
+    return {"ok": True}
 
 
 # ---------- Upload ----------
-async def upsert_anagrafica(party: dict, ruolo: str) -> Optional[str]:
+async def upsert_anagrafica(party: dict, ruolo: str, company_vat: str) -> Optional[str]:
     chiave = norm_vat(party.get("piva")) or (party.get("codice_fiscale") or "").upper()
     if not chiave:
         return None
@@ -357,7 +409,7 @@ async def upsert_anagrafica(party: dict, ruolo: str) -> Optional[str]:
     fields["chiave"] = chiave
     fields["updated_at"] = datetime.now(timezone.utc)
     doc = await db.anagrafiche.find_one_and_update(
-        {"chiave": chiave},
+        {"company_vat": company_vat, "chiave": chiave},
         {"$set": fields, "$addToSet": {"ruoli": ruolo}, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
         upsert=True, return_document=True,
     )
@@ -365,17 +417,20 @@ async def upsert_anagrafica(party: dict, ruolo: str) -> Optional[str]:
 
 
 async def store_invoice(inv: dict, raw_xml: str, filename: str, company_vat: str) -> dict:
-    ced = inv["cedente"]
+    ced, ces = inv["cedente"], inv["cessionario"]
     is_attiva = company_vat in (norm_vat(ced.get("piva")), (ced.get("codice_fiscale") or "").upper())
+    is_passiva = company_vat in (norm_vat(ces.get("piva")), (ces.get("codice_fiscale") or "").upper())
+    if not is_attiva and not is_passiva:
+        return {"status": "error", "message": f"La P.IVA {company_vat} non compare né come cedente né come cessionario", "numero": inv["numero"]}
     tipo = "attiva" if is_attiva else "passiva"
     controparte = inv["cessionario"] if is_attiva else ced
     ruolo = "cliente" if is_attiva else "fornitore"
     dedup = f"{norm_vat(ced.get('piva')) or ced.get('codice_fiscale')}|{inv['tipo_documento']}|{inv['numero']}|{inv['data']}"
-    if await db.invoices.find_one({"dedup_key": dedup}, {"_id": 1}):
+    if await db.invoices.find_one({"company_vat": company_vat, "dedup_key": dedup}, {"_id": 1}):
         return {"status": "duplicate", "message": "Fattura già presente in archivio", "numero": inv["numero"], "tipo": tipo}
-    controparte_id = await upsert_anagrafica(controparte, ruolo)
+    controparte_id = await upsert_anagrafica(controparte, ruolo, company_vat)
     doc = Invoice(
-        tipo=tipo, anno=inv["anno"], numero=inv["numero"], data=inv["data"], totale=inv["totale"],
+        company_vat=company_vat, tipo=tipo, anno=inv["anno"], numero=inv["numero"], data=inv["data"], totale=inv["totale"],
         **{k: v for k, v in inv.items() if k not in ("anno", "numero", "data", "totale")},
         controparte_id=controparte_id,
         controparte_nome=controparte.get("denominazione", ""),
@@ -388,10 +443,7 @@ async def store_invoice(inv: dict, raw_xml: str, filename: str, company_vat: str
 
 
 @api.post("/invoices/upload")
-async def upload_invoices(files: List[UploadFile] = File(...), user=Depends(get_current_user)):
-    company_vat = (await get_settings())["company_vat"]
-    if not company_vat:
-        raise HTTPException(400, "Configura prima la P.IVA aziendale nelle Impostazioni")
+async def upload_invoices(files: List[UploadFile] = File(...), company_vat=Depends(get_tenant)):
     results = []
     for f in files:
         data = await f.read()
@@ -414,8 +466,8 @@ async def upload_invoices(files: List[UploadFile] = File(...), user=Depends(get_
 LIST_PROJECTION = {"xml": 0, "righe": 0, "riepilogo": 0, "pagamenti": 0, "trasmissione": 0}
 
 
-def build_query(tipo, anno, q, anagrafica_id):
-    query = {}
+def build_query(vat, tipo, anno, q, anagrafica_id):
+    query = {"company_vat": vat}
     if tipo:
         query["tipo"] = tipo
     if anno:
@@ -439,8 +491,8 @@ def sort_spec(order: str):
 @api.get("/invoices")
 async def list_invoices(tipo: Optional[str] = None, anno: Optional[int] = None, q: Optional[str] = None,
                         anagrafica_id: Optional[str] = None, order: str = "asc", page: int = 1, limit: int = 50,
-                        user=Depends(get_current_user)):
-    query = build_query(tipo, anno, q, anagrafica_id)
+                        vat=Depends(get_tenant)):
+    query = build_query(vat, tipo, anno, q, anagrafica_id)
     total = await db.invoices.count_documents(query)
     limit = max(1, min(limit, 200))
     cursor = db.invoices.find(query, LIST_PROJECTION).sort(sort_spec(order)).skip((max(page, 1) - 1) * limit).limit(limit)
@@ -450,8 +502,8 @@ async def list_invoices(tipo: Optional[str] = None, anno: Optional[int] = None, 
 
 
 @api.get("/invoices/years")
-async def invoice_years(tipo: Optional[str] = None, user=Depends(get_current_user)):
-    years = await db.invoices.distinct("anno", {"tipo": tipo} if tipo else {})
+async def invoice_years(tipo: Optional[str] = None, vat=Depends(get_tenant)):
+    years = await db.invoices.distinct("anno", {"company_vat": vat, **({"tipo": tipo} if tipo else {})})
     return sorted(years, reverse=True)
 
 
@@ -461,8 +513,8 @@ def _fmt(n):
 
 @api.get("/invoices/export")
 async def export_csv(tipo: Optional[str] = None, anno: Optional[int] = None, q: Optional[str] = None,
-                     anagrafica_id: Optional[str] = None, order: str = "asc", user=Depends(get_current_user)):
-    query = build_query(tipo, anno, q, anagrafica_id)
+                     anagrafica_id: Optional[str] = None, order: str = "asc", vat=Depends(get_tenant)):
+    query = build_query(vat, tipo, anno, q, anagrafica_id)
     buf = io.StringIO()
     buf.write("\ufeff")
     w = csv.writer(buf, delimiter=";")
@@ -471,7 +523,7 @@ async def export_csv(tipo: Optional[str] = None, anno: Optional[int] = None, q: 
         w.writerow([d["tipo"], d["anno"], d["numero"], d["data"], d.get("tipo_documento", ""), d.get("controparte_nome", ""),
                     d.get("controparte_piva", ""), _fmt(d.get("imponibile", 0)), _fmt(d.get("imposta", 0)), _fmt(d.get("totale", 0)),
                     d.get("divisa", ""), d.get("filename", "")])
-    name = f"fatture_{tipo or 'tutte'}_{anno or 'tutti-anni'}.csv"
+    name = f"fatture_{vat}_{tipo or 'tutte'}_{anno or 'tutti-anni'}.csv"
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",
                              headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
@@ -483,16 +535,16 @@ def _oid(id_: str) -> ObjectId:
 
 
 @api.get("/invoices/{invoice_id}")
-async def get_invoice(invoice_id: str, user=Depends(get_current_user)):
-    d = await db.invoices.find_one({"_id": _oid(invoice_id)})
+async def get_invoice(invoice_id: str, vat=Depends(get_tenant)):
+    d = await db.invoices.find_one({"_id": _oid(invoice_id), "company_vat": vat})
     if not d:
         raise HTTPException(404, "Fattura non trovata")
     return Invoice.from_mongo(d).model_dump()
 
 
 @api.get("/invoices/{invoice_id}/xml")
-async def get_invoice_xml(invoice_id: str, user=Depends(get_current_user)):
-    d = await db.invoices.find_one({"_id": _oid(invoice_id)}, {"xml": 1, "numero": 1, "filename": 1})
+async def get_invoice_xml(invoice_id: str, vat=Depends(get_tenant)):
+    d = await db.invoices.find_one({"_id": _oid(invoice_id), "company_vat": vat}, {"xml": 1, "numero": 1, "filename": 1})
     if not d:
         raise HTTPException(404, "Fattura non trovata")
     fname = (d.get("filename") or f"fattura_{d['numero']}").split("/")[-1]
@@ -503,8 +555,8 @@ async def get_invoice_xml(invoice_id: str, user=Depends(get_current_user)):
 
 
 @api.delete("/invoices/{invoice_id}")
-async def delete_invoice(invoice_id: str, user=Depends(get_current_user)):
-    res = await db.invoices.delete_one({"_id": _oid(invoice_id)})
+async def delete_invoice(invoice_id: str, vat=Depends(get_tenant)):
+    res = await db.invoices.delete_one({"_id": _oid(invoice_id), "company_vat": vat})
     if not res.deleted_count:
         raise HTTPException(404, "Fattura non trovata")
     return {"ok": True}
@@ -513,15 +565,15 @@ async def delete_invoice(invoice_id: str, user=Depends(get_current_user)):
 # ---------- Anagrafiche ----------
 @api.get("/anagrafiche")
 async def list_anagrafiche(ruolo: Optional[str] = None, q: Optional[str] = None, anno: Optional[int] = None,
-                           user=Depends(get_current_user)):
-    query = {}
+                           vat=Depends(get_tenant)):
+    query = {"company_vat": vat}
     if ruolo:
         query["ruoli"] = ruolo
     if q and q.strip():
         rx = {"$regex": re.escape(q.strip()), "$options": "i"}
         query["$or"] = [{"denominazione": rx}, {"chiave": rx}, {"codice_fiscale": rx}, {"comune": rx}]
     docs = await db.anagrafiche.find(query).sort("denominazione", ASCENDING).to_list(2000)
-    inv_match = {}
+    inv_match = {"company_vat": vat}
     if ruolo:
         inv_match["tipo"] = "attiva" if ruolo == "cliente" else "passiva"
     if anno:
@@ -543,13 +595,13 @@ async def list_anagrafiche(ruolo: Optional[str] = None, q: Optional[str] = None,
 
 
 @api.get("/anagrafiche/{anag_id}")
-async def get_anagrafica(anag_id: str, user=Depends(get_current_user)):
-    d = await db.anagrafiche.find_one({"_id": _oid(anag_id)})
+async def get_anagrafica(anag_id: str, vat=Depends(get_tenant)):
+    d = await db.anagrafiche.find_one({"_id": _oid(anag_id), "company_vat": vat})
     if not d:
         raise HTTPException(404, "Anagrafica non trovata")
     a = Anagrafica.from_mongo(d).model_dump()
     agg = await db.invoices.aggregate([
-        {"$match": {"controparte_id": anag_id}},
+        {"$match": {"company_vat": vat, "controparte_id": anag_id}},
         {"$group": {"_id": "$tipo", "n": {"$sum": 1}, "totale": {"$sum": "$totale"}}},
     ]).to_list(10)
     a["riepilogo"] = {g["_id"]: {"n": g["n"], "totale": round(g["totale"], 2)} for g in agg}
@@ -558,8 +610,8 @@ async def get_anagrafica(anag_id: str, user=Depends(get_current_user)):
 
 # ---------- Stats ----------
 @api.get("/stats")
-async def stats(anno: Optional[int] = None, user=Depends(get_current_user)):
-    match = {"anno": anno} if anno else {}
+async def stats(anno: Optional[int] = None, vat=Depends(get_tenant)):
+    match = {"company_vat": vat, **({"anno": anno} if anno else {})}
     groups = await db.invoices.aggregate([
         {"$match": match},
         {"$group": {"_id": "$tipo", "n": {"$sum": 1}, "totale": {"$sum": "$totale"}, "imposta": {"$sum": "$imposta"}}},
@@ -576,8 +628,8 @@ async def stats(anno: Optional[int] = None, user=Depends(get_current_user)):
             months[idx][m["_id"]["t"]] = round(m["totale"], 2)
     recent = [Invoice.from_mongo(d).model_dump() async for d in
               db.invoices.find(match, LIST_PROJECTION).sort("created_at", DESCENDING).limit(6)]
-    n_clienti = await db.anagrafiche.count_documents({"ruoli": "cliente"})
-    n_fornitori = await db.anagrafiche.count_documents({"ruoli": "fornitore"})
+    n_clienti = await db.anagrafiche.count_documents({"company_vat": vat, "ruoli": "cliente"})
+    n_fornitori = await db.anagrafiche.count_documents({"company_vat": vat, "ruoli": "fornitore"})
     return {"per_tipo": per_tipo, "mensile": months, "recenti": recent, "n_clienti": n_clienti, "n_fornitori": n_fornitori}
 
 
@@ -598,10 +650,14 @@ async def startup():
     await db.login_attempts.create_index("identifier")
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.password_reset_tokens.create_index("token_hash")
-    await db.invoices.create_index("dedup_key", unique=True)
-    await db.invoices.create_index([("tipo", 1), ("anno", -1), ("numero_key", 1)])
-    await db.invoices.create_index("controparte_id")
-    await db.anagrafiche.create_index("chiave", unique=True)
+    for coll, idx in ((db.invoices, "dedup_key_1"), (db.anagrafiche, "chiave_1"), (db.invoices, "tipo_1_anno_-1_numero_key_1")):
+        if idx in await coll.index_information():
+            await coll.drop_index(idx)
+    await db.invoices.create_index([("company_vat", 1), ("dedup_key", 1)], unique=True)
+    await db.invoices.create_index([("company_vat", 1), ("tipo", 1), ("anno", -1), ("numero_key", 1)])
+    await db.invoices.create_index([("company_vat", 1), ("controparte_id", 1)])
+    await db.anagrafiche.create_index([("company_vat", 1), ("chiave", 1)], unique=True)
+    await db.users.create_index("company_vat")
     email = os.environ["ADMIN_EMAIL"].lower()
     pwd = os.environ["ADMIN_PASSWORD"]
     existing = await db.users.find_one({"email": email})

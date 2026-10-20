@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, UploadCloud } from "lucide-react";
+import { UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader, Panel } from "@/components/common";
 import { api, fmtEUR } from "@/lib/api";
+import { useCompany } from "@/context/CompanyContext";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -21,11 +22,10 @@ export default function Dashboard() {
   const [anno, setAnno] = useState("tutti");
   const [years, setYears] = useState([]);
   const [stats, setStats] = useState(null);
-  const [vat, setVat] = useState(null);
+  const { current } = useCompany();
 
   useEffect(() => {
     api.get("/invoices/years").then((r) => setYears(r.data));
-    api.get("/settings").then((r) => setVat(r.data.company_vat));
   }, []);
   useEffect(() => {
     api.get("/stats", { params: anno === "tutti" ? {} : { anno } }).then((r) => setStats(r.data));
@@ -37,7 +37,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <PageHeader eyebrow="Panoramica" title="Dashboard">
+      <PageHeader eyebrow={current ? `${current.company_name || "Panoramica"} · P.IVA ${current.company_vat}` : "Panoramica"} title="Dashboard">
         <Select value={String(anno)} onValueChange={setAnno}>
           <SelectTrigger className="w-36 bg-white" data-testid="dashboard-year-select"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -47,12 +47,6 @@ export default function Dashboard() {
         </Select>
         <Button asChild data-testid="dashboard-upload-button"><Link to="/carica"><UploadCloud className="mr-2 h-4 w-4" />Carica fatture</Link></Button>
       </PageHeader>
-      {vat === "" && (
-        <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800" data-testid="dashboard-vat-warning">
-          <AlertTriangle size={18} /> Imposta la P.IVA della tua azienda per distinguere fatture attive e passive.
-          <Link to="/impostazioni" className="ml-auto font-semibold underline">Impostazioni</Link>
-        </div>
-      )}
       <div className="fade-up grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat testid="stat-attive" label="Fatture attive" value={fmtEUR(a.totale)} sub={`${a.n} documenti · IVA ${fmtEUR(a.imposta)}`} accent="text-emerald-700" />
         <Stat testid="stat-passive" label="Fatture passive" value={fmtEUR(p.totale)} sub={`${p.n} documenti · IVA ${fmtEUR(p.imposta)}`} accent="text-indigo-700" />
