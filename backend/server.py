@@ -610,6 +610,7 @@ async def delete_invoice(invoice_id: str, vat=Depends(get_tenant)):
     cid = d.get("controparte_id")
     if cid and not await db.invoices.count_documents({"company_vat": vat, "controparte_id": cid}, limit=1):
         await db.anagrafiche.delete_one({"_id": ObjectId(cid), "company_vat": vat})
+        await db.anagrafiche.delete_many({"company_vat": vat, "merged_into": cid})
     return {"ok": True}
 
 
@@ -617,7 +618,7 @@ async def delete_invoice(invoice_id: str, vat=Depends(get_tenant)):
 @api.get("/anagrafiche")
 async def list_anagrafiche(ruolo: Optional[str] = None, q: Optional[str] = None, anno: Optional[int] = None,
                            vat=Depends(get_tenant)):
-    query = {"company_vat": vat}
+    query = {"company_vat": vat, "merged_into": {"$exists": False}}
     if ruolo:
         query["ruoli"] = ruolo
     if q and q.strip():
@@ -647,7 +648,7 @@ async def list_anagrafiche(ruolo: Optional[str] = None, q: Optional[str] = None,
 
 @api.get("/anagrafiche/{anag_id}")
 async def get_anagrafica(anag_id: str, vat=Depends(get_tenant)):
-    d = await db.anagrafiche.find_one({"_id": _oid(anag_id), "company_vat": vat})
+    d = await db.anagrafiche.find_one({"_id": _oid(anag_id), "company_vat": vat, "merged_into": {"$exists": False}})
     if not d:
         raise HTTPException(404, "Anagrafica non trovata")
     a = Anagrafica.from_mongo(d).model_dump()
@@ -686,10 +687,11 @@ async def stats(anno: Optional[int] = None, vat=Depends(get_tenant)):
 
 app.include_router(api)
 
+CORS_ORIGINS = [o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ["CORS_ORIGINS"].split(","),
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials="*" not in CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

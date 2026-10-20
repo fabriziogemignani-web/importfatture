@@ -1,0 +1,32 @@
+{
+  "summary": "Tested the soft-merge dedup_anagrafiche and the CORS_ORIGINS change on the LOCAL test_database only. REPRO: dropped the anagrafiche indexes, seeded company 01192570453 plus 2 identical cliente anagrafiche (chiave 01428910457, TEST_Dup), each with 1 attiva invoice, then restarted the backend. The log shows 'Soft-merged 1 duplicate anagrafiche into <keep>' and 'Application startup complete'. Results: the anagrafiche count stays 2 (nothing deleted); exactly 1 active cliente (the lowest ObjectId is kept); the other record has merged_into=keep, ruoli [], ruolo 'unita' and chiave '01428910457#unita#<id>'; both invoices point to the kept id; the unique index company_vat_1_ruolo_1_chiave_1 exists. A 2nd and a 3rd restart (the 3rd after a new upload) were idempotent: identical snapshot, no crash. API on the public URL: the Clienti list shows 1 row with combined totals (2 invoices, 150.5); Fornitori is empty; stats show n_clienti=1 and n_fornitori=0; the kept detail riepilogo is correct; uploading a new XML for 01428910457 updated the kept record (no new duplicate, 3 invoices, n_clienti still 1). UI: the dashboard shows 1 / 0; Anagrafiche > Clienti shows 1 row (totals 3 docs, 1370,50 EUR); search by P.IVA returns 1 row; the Fornitori tab shows the empty state; the detail page and the Fatture Attive list are correct. Login sets httpOnly, Secure, SameSite=None cookies. CORS: a preflight from the preview origin returns that exact origin plus Allow-Credentials true. However, .env has CORS_ORIGINS=\"*\". As a result, ANY origin is reflected with credentials on preflight, and also on simple requests that carry cookies. All TEST data has been cleaned up (only the admin user remains).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "CORSMiddleware (all /api)", "issue": "SECURITY: backend/.env has CORS_ORIGINS=\"*\" and the code sets allow_credentials=True. Starlette 0.37 then reflects the request Origin on preflight, and on any request that carries a Cookie header. Verified: OPTIONS from https://evil.example.com returns ACAO evil.example.com + credentials true, and GET /api/auth/me with Origin evil + Cookie does the same. Since the cookies are SameSite=None, any site could make credentialed calls and read the responses. Also, a credentialed request without a cookie (first login) gets ACAO '*' + credentials, which browsers reject for cross-origin calls. The preview frontend is same-origin, so the app still works.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/anagrafiche (no ruolo param)", "issue": "Merged records (merged_into set) are returned when ruolo is omitted. The frontend always sends ruolo, so this is not visible in the UI. Add {merged_into: {$exists: false}} to the base query."},
+      {"endpoint": "GET /api/anagrafiche/{merged_id}", "issue": "Returns 200 for a merged record (ruolo 'unita', empty riepilogo). Consider returning 404 or redirecting to merged_into for old bookmarked links."},
+      {"endpoint": "DELETE /api/invoices/{id}", "issue": "When the last invoice of the kept record is deleted, the kept anagrafica is hard-deleted but the merged sibling stays with merged_into pointing to a deleted id (orphan soft-merged doc). Harmless, but untidy."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/soft_merge_repro.py", "/app/backend/tests/test_soft_merge_dedup.py", "/app/test_reports/pytest/iteration_10.xml"],
+  "action_items": [
+    "Set CORS_ORIGINS in backend/.env (and in production env) to explicit origins, e.g. https://fe-archivio.preview.emergentagent.com,http://localhost:3000, never '*' with allow_credentials=True. Optionally make startup fail or warn if '*' is used.",
+    "Exclude merged_into docs from GET /api/anagrafiche when no ruolo is given (and optionally from the detail endpoint)."
+  ],
+  "critical_code_review_comments": [
+    "dedup_anagrafiche: soft merge is correct and idempotent: it matches only non-merged docs, the merged chiave is unique per id, and the unique index builds after it.",
+    "stats n_clienti/n_fornitori filter by ruoli, so merged docs (ruoli []) are excluded correctly.",
+    "upsert_anagrafica matches on ruolo + original chiave, so it never touches merged docs."
+  ],
+  "updated_files": ["/app/backend/tests/soft_merge_repro.py", "/app/backend/tests/test_soft_merge_dedup.py"],
+  "success_rate": {"backend": "11/12 pytest (the 1 failure is the CORS '*' on a cookie-less credentialed simple response); all dedup checks pass", "frontend": "100%"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / FattureXML2026 (unchanged)",
+  "seed_data_creation": "Created and then removed: company 01192570453 (TEST_SoftMerge), 2 anagrafiche, 3 invoices. The DB is back to admin only.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: python /app/backend/tests/soft_merge_repro.py seed, then sudo supervisorctl restart backend, then python soft_merge_repro.py verify, then pytest test_soft_merge_dedup.py -n0, then python soft_merge_repro.py cleanup. test_login_cookies only passes once CORS_ORIGINS is explicit. pytest.ini uses xdist; use -n0 -s to see the print output.",
+  "rca of the issue": "CORS: the code change is correct (it reads CORS_ORIGINS), but the env value is '*'. Starlette sets preflight_explicit_allow_origin when allow_credentials is on, and it reflects the origin for cookie-bearing requests, so '*' effectively means 'any origin with credentials'. Fix: put explicit origins in the env."
+}
