@@ -5,7 +5,9 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import csv
+import hashlib
 import io
+import secrets
 import os
 import re
 import logging
@@ -23,6 +25,7 @@ from starlette.middleware.cors import CORSMiddleware
 from pymongo import ASCENDING, DESCENDING
 
 from fattura_parser import extract_xml_files, parse_fattura
+from email_service import reset_email_html, send_email
 
 client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = client[os.environ["DB_NAME"]]
@@ -71,6 +74,32 @@ class LoginIn(BaseModel):
     password: str
 
 
+class ForgotIn(BaseModel):
+    email: str
+
+
+class ResetIn(BaseModel):
+    token: str
+    password: str = Field(min_length=8)
+
+
+class UserCreate(BaseModel):
+    email: str
+    name: str = ""
+    role: str = Field(default="user", pattern="^(admin|user)$")
+    password: str = Field(min_length=8)
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
+    active: Optional[bool] = None
+
+
+class PasswordIn(BaseModel):
+    password: str = Field(min_length=8)
+
+
 class SettingsIn(BaseModel):
     company_vat: str
     company_name: str = ""
@@ -98,7 +127,8 @@ def set_auth_cookies(response: Response, user_id: str, email: str):
 
 
 def _public_user(u: dict) -> dict:
-    return {"id": str(u["_id"]), "email": u["email"], "name": u.get("name", ""), "role": u.get("role", "user")}
+    return {"id": str(u["_id"]), "email": u["email"], "name": u.get("name", ""), "role": u.get("role", "user"),
+            "active": u.get("active", True), "created_at": u.get("created_at")}
 
 
 async def get_current_user(request: Request) -> dict:
@@ -117,9 +147,15 @@ async def get_current_user(request: Request) -> dict:
     if payload.get("type") != "access":
         raise HTTPException(401, "Token non valido")
     user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
-    if not user:
-        raise HTTPException(401, "Utente non trovato")
+    if not user or not user.get("active", True):
+        raise HTTPException(401, "Utente non trovato o disattivato")
     return _public_user(user)
+
+
+async def require_admin(user=Depends(get_current_user)) -> dict:
+    if user["role"] != "admin":
+        raise HTTPException(403, "Operazione riservata agli amministratori")
+    return user
 
 
 @api.post("/auth/login")
@@ -137,6 +173,8 @@ async def login(body: LoginIn, request: Request, response: Response):
     if not user or not verify_password(body.password, user["password_hash"]):
         await db.login_attempts.update_one({"identifier": ident}, {"$inc": {"count": 1}, "$set": {"last": now}}, upsert=True)
         raise HTTPException(401, "Email o password non corretti")
+    if not user.get("active", True):
+        raise HTTPException(403, "Account disattivato. Contatta l'amministratore.")
     await db.login_attempts.delete_one({"identifier": ident})
     set_auth_cookies(response, str(user["_id"]), email)
     return _public_user(user)
@@ -166,10 +204,105 @@ async def refresh(request: Request, response: Response):
     if payload.get("type") != "refresh":
         raise HTTPException(401, "Token non valido")
     user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
-    if not user:
-        raise HTTPException(401, "Utente non trovato")
+    if not user or not user.get("active", True):
+        raise HTTPException(401, "Utente non trovato o disattivato")
     set_auth_cookies(response, str(user["_id"]), user["email"])
     return _public_user(user)
+
+
+def _hash_token(t: str) -> str:
+    return hashlib.sha256(t.encode()).hexdigest()
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(body: ForgotIn):
+    email = body.email.strip().lower()
+    msg = {"ok": True, "message": "Se l'email è registrata riceverai un link per reimpostare la password."}
+    user = await db.users.find_one({"email": email})
+    if not user or not user.get("active", True):
+        return msg
+    now = datetime.now(timezone.utc)
+    recent = await db.password_reset_tokens.count_documents({"user_id": str(user["_id"]), "created_at": {"$gt": now - timedelta(hours=1)}})
+    if recent >= 3:
+        return msg
+    token = secrets.token_urlsafe(32)
+    await db.password_reset_tokens.insert_one({"token_hash": _hash_token(token), "user_id": str(user["_id"]), "used": False,
+                                               "created_at": now, "expires_at": now + timedelta(hours=1)})
+    link = f"{os.environ['APP_URL'].rstrip('/')}/reset-password?token={token}"
+    await send_email(to=email, subject="Reimposta la tua password", html=reset_email_html(user.get("name", ""), link))
+    return msg
+
+
+@api.post("/auth/reset-password")
+async def reset_password(body: ResetIn):
+    rec = await db.password_reset_tokens.find_one({"token_hash": _hash_token(body.token)})
+    now = datetime.now(timezone.utc)
+    exp = rec["expires_at"].replace(tzinfo=timezone.utc) if rec and rec["expires_at"].tzinfo is None else (rec or {}).get("expires_at")
+    if not rec or rec["used"] or exp < now:
+        raise HTTPException(400, "Link non valido o scaduto. Richiedine uno nuovo.")
+    await db.users.update_one({"_id": ObjectId(rec["user_id"])}, {"$set": {"password_hash": hash_password(body.password)}})
+    await db.password_reset_tokens.update_many({"user_id": rec["user_id"]}, {"$set": {"used": True}})
+    return {"ok": True}
+
+
+# ---------- Users (admin) ----------
+async def _other_active_admins(exclude_id: ObjectId) -> int:
+    return await db.users.count_documents({"role": "admin", "active": {"$ne": False}, "_id": {"$ne": exclude_id}})
+
+
+@api.get("/users")
+async def list_users(admin=Depends(require_admin)):
+    return [_public_user(u) async for u in db.users.find({}).sort("created_at", ASCENDING)]
+
+
+@api.post("/users")
+async def create_user(body: UserCreate, admin=Depends(require_admin)):
+    email = body.email.strip().lower()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(400, "Email non valida")
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(400, "Esiste già un utente con questa email")
+    doc = {"email": email, "name": body.name.strip(), "role": body.role, "active": True,
+           "password_hash": hash_password(body.password), "created_at": datetime.now(timezone.utc)}
+    res = await db.users.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return _public_user(doc)
+
+
+@api.patch("/users/{user_id}")
+async def update_user(user_id: str, body: UserUpdate, admin=Depends(require_admin)):
+    oid = _oid(user_id)
+    changes = body.model_dump(exclude_none=True)
+    demoting = changes.get("role") == "user" or changes.get("active") is False
+    if demoting and user_id == admin["id"]:
+        raise HTTPException(400, "Non puoi rimuovere i tuoi permessi di amministratore")
+    if demoting and not await _other_active_admins(oid):
+        raise HTTPException(400, "Deve rimanere almeno un amministratore attivo")
+    u = await db.users.find_one_and_update({"_id": oid}, {"$set": changes}, return_document=True)
+    if not u:
+        raise HTTPException(404, "Utente non trovato")
+    return _public_user(u)
+
+
+@api.post("/users/{user_id}/password")
+async def set_user_password(user_id: str, body: PasswordIn, admin=Depends(require_admin)):
+    res = await db.users.update_one({"_id": _oid(user_id)}, {"$set": {"password_hash": hash_password(body.password)}})
+    if not res.matched_count:
+        raise HTTPException(404, "Utente non trovato")
+    return {"ok": True}
+
+
+@api.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin=Depends(require_admin)):
+    oid = _oid(user_id)
+    if user_id == admin["id"]:
+        raise HTTPException(400, "Non puoi eliminare il tuo account")
+    if not await _other_active_admins(oid):
+        raise HTTPException(400, "Deve rimanere almeno un amministratore attivo")
+    res = await db.users.delete_one({"_id": oid})
+    if not res.deleted_count:
+        raise HTTPException(404, "Utente non trovato")
+    return {"ok": True}
 
 
 # ---------- Settings ----------
@@ -189,7 +322,7 @@ async def read_settings(user=Depends(get_current_user)):
 
 
 @api.put("/settings")
-async def update_settings(body: SettingsIn, user=Depends(get_current_user)):
+async def update_settings(body: SettingsIn, user=Depends(require_admin)):
     vat = norm_vat(body.company_vat)
     if not vat:
         raise HTTPException(400, "Inserisci una P.IVA valida")
@@ -436,6 +569,8 @@ app.add_middleware(
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.login_attempts.create_index("identifier")
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.password_reset_tokens.create_index("token_hash")
     await db.invoices.create_index("dedup_key", unique=True)
     await db.invoices.create_index([("tipo", 1), ("anno", -1), ("numero_key", 1)])
     await db.invoices.create_index("controparte_id")

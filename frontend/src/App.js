@@ -11,6 +11,9 @@ import Anagrafiche from "@/pages/Anagrafiche";
 import AnagraficaDetail from "@/pages/AnagraficaDetail";
 import Upload from "@/pages/Upload";
 import Settings from "@/pages/Settings";
+import Users from "@/pages/Users";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 
 const Protected = ({ children }) => {
   const { user } = useAuth();
@@ -21,12 +24,19 @@ const Protected = ({ children }) => {
   return children;
 };
 
+const AdminOnly = ({ children }) => {
+  const { user } = useAuth();
+  return user?.role === "admin" ? children : <Navigate to="/" replace />;
+};
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/password-dimenticata" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route element={<Protected><Layout /></Protected>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/attive" element={<Invoices tipo="attiva" />} />
@@ -36,6 +46,7 @@ function App() {
             <Route path="/anagrafiche/:id" element={<AnagraficaDetail />} />
             <Route path="/carica" element={<Upload />} />
             <Route path="/impostazioni" element={<Settings />} />
+            <Route path="/utenti" element={<AdminOnly><Users /></AdminOnly>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutGrid, ArrowUpRight, ArrowDownLeft, Users, UploadCloud, Settings, LogOut, Menu, X, FileText } from "lucide-react";
+import { LayoutGrid, ArrowUpRight, ArrowDownLeft, Users, UploadCloud, Settings, LogOut, Menu, X, FileText, UserCog } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/anagrafiche", label: "Anagrafiche", icon: Users, id: "anagrafiche" },
   { to: "/carica", label: "Caricamento", icon: UploadCloud, id: "carica" },
   { to: "/impostazioni", label: "Impostazioni", icon: Settings, id: "impostazioni" },
+  { to: "/utenti", label: "Utenti", icon: UserCog, id: "utenti", admin: true },
 ];
 
 const Sidebar = ({ onNavigate, vat }) => {
@@ -27,7 +28,7 @@ const Sidebar = ({ onNavigate, vat }) => {
         </div>
       </div>
       <nav className="mt-6 flex flex-1 flex-col gap-1">
-        {NAV.map(({ to, label, icon: Icon, id }) => (
+        {NAV.filter((n) => !n.admin || user?.role === "admin").map(({ to, label, icon: Icon, id }) => (
           <NavLink key={to} to={to} end={to === "/"} onClick={onNavigate} data-testid={`nav-${id}`}
             className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${isActive ? "bg-slate-900 text-white font-medium shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>
             <Icon size={17} /> {label}
