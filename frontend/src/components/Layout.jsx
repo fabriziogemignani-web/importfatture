@@ -18,6 +18,7 @@ const NAV = [
 const CompanyPicker = () => {
   const { user } = useAuth();
   const { companies, active, current, setActive } = useCompany();
+  if (companies === null) return <div className="mt-4 h-12 animate-pulse rounded-lg bg-slate-100" data-testid="sidebar-company-loading" />;
   if (user?.role !== "admin") {
     return (
       <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" data-testid="sidebar-company">
@@ -33,7 +34,14 @@ const CompanyPicker = () => {
     <div className="mt-4">
       <div className="mb-1 px-1 font-mono text-[10px] uppercase tracking-wider text-slate-500">P.IVA attiva</div>
       <Select value={active} onValueChange={setActive}>
-        <SelectTrigger className="h-auto py-2 text-left" data-testid="company-select"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-auto py-2 text-left" data-testid="company-select">
+          <SelectValue>
+            <span className="block min-w-0">
+              <span className="block truncate text-sm font-medium">{current?.company_name || current?.company_vat}</span>
+              <span className="block font-mono text-[10px] text-slate-500">{current?.company_vat}</span>
+            </span>
+          </SelectValue>
+        </SelectTrigger>
         <SelectContent>
           {companies.map((c) => (
             <SelectItem key={c.company_vat} value={c.company_vat} data-testid={`company-option-${c.company_vat}`}>

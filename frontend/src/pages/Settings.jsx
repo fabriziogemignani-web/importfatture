@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { PageHeader, Panel } from "@/components/common";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -58,7 +59,13 @@ const CompanyRow = ({ c, onDone }) => {
         {editing
           ? <Button size="sm" onClick={() => act(() => api.patch(`/companies/${c.company_vat}`, { company_name: name }), "Ragione sociale aggiornata")} data-testid={`company-rename-save-${c.company_vat}`}>Salva</Button>
           : <Button size="sm" variant="ghost" onClick={() => setEditing(true)} data-testid={`company-rename-${c.company_vat}`}><Pencil className="h-4 w-4" /></Button>}
-        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => act(() => api.delete(`/companies/${c.company_vat}`), "P.IVA eliminata")} data-testid={`company-delete-${c.company_vat}`}><Trash2 className="h-4 w-4" /></Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild><Button size="sm" variant="ghost" className="text-red-600" data-testid={`company-delete-${c.company_vat}`}><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader><AlertDialogTitle>Eliminare la P.IVA {c.company_vat}?</AlertDialogTitle><AlertDialogDescription>Possibile solo se non ha fatture o utenti collegati. Verranno rimosse anche le sue anagrafiche.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel>Annulla</AlertDialogCancel><AlertDialogAction onClick={() => act(() => api.delete(`/companies/${c.company_vat}`), "P.IVA eliminata")} data-testid="company-delete-confirm">Elimina</AlertDialogAction></AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </TableCell>
     </TableRow>
   );

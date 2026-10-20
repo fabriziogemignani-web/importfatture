@@ -20,8 +20,8 @@ const VatSelect = ({ value, onChange, testid, allowNone }) => {
     <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
       <SelectTrigger className="h-8 w-52" data-testid={testid}><SelectValue /></SelectTrigger>
       <SelectContent>
-        {allowNone && <SelectItem value={NONE}>Nessuna</SelectItem>}
-        {(companies || []).map((c) => <SelectItem key={c.company_vat} value={c.company_vat}>{c.company_name || c.company_vat} · {c.company_vat}</SelectItem>)}
+        {allowNone && <SelectItem value={NONE} data-testid={`${testid}-option-none`}>Nessuna</SelectItem>}
+        {(companies || []).map((c) => <SelectItem key={c.company_vat} value={c.company_vat} data-testid={`${testid}-option-${c.company_vat}`}>{c.company_name || c.company_vat} · {c.company_vat}</SelectItem>)}
       </SelectContent>
     </Select>
   );

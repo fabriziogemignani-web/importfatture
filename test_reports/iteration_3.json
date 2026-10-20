@@ -1,0 +1,39 @@
+{
+  "summary": "Multi-tenant P.IVA isolation feature tested end-to-end. Backend: new /app/backend/tests/test_multitenant.py, 19/19 pass. Covered: companies CRUD (IT prefix stripped, duplicate/invalid rejected, rename, delete blocked when users or invoices are linked), user<->P.IVA linking (role user needs a P.IVA, unknown P.IVA rejected, admin may have none, PATCH change), upload classification (cedente->attiva, cessionario->passiva, neither->error 'non compare né come cedente né come cessionario'), duplicate check scoped per P.IVA (same invoice imported by both P.IVA), p7m/zip, isolation (other tenant's invoice GET/xml/DELETE->404, anagrafica->404, stats/years/CSV scoped, users' X-Company-Vat spoofing ignored, /companies shows only the user's own P.IVA), admin without header->400, admin with unknown header->400. Frontend (Playwright, 1920x1080): admin no-company-notice + sidebar-no-company on all data pages; Impostazioni add/duplicate toast/rename/delete-blocked toast/delete success; sidebar company-select switching filters attive/passive/dashboard/upload per P.IVA; choice persists after reload; Users page create user (no P.IVA -> error toast, with P.IVA -> ok), user-vat-select change persists. User role: sidebar-company shows own P.IVA, no company-select, no Utenti nav (/utenti redirects to /), settings-readonly, sees only own invoices/anagrafiche. Regression OK: login, forgot-password link present, invoice detail, anagrafiche year tabs + sortable columns. All TEST data deleted at the end; DB has only the admin user, admin password unchanged.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/invoices/upload", "issue": "store_invoice runs find_one and then insert_one without catching DuplicateKeyError. Two uploads of the same file at the same time would hit the unique (company_vat, dedup_key) index and return a 500 instead of 'duplicate'."},
+      {"endpoint": "startup seed_admin", "issue": "Only sets role and active on an existing admin. It does not update password_hash if ADMIN_PASSWORD in .env changed (playbook item 5). Carried over from earlier iterations."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sidebar company selector (admin)", "issues": ["The SelectTrigger shows the two-line item content (name + P.IVA) squeezed onto one line, so even short names are cut off ('TEST Alf…', 'TEST Be…') and the P.IVA is not visible in the closed trigger. Show name and P.IVA on separate lines in the trigger, or show only the name."]},
+      {"screen": "Impostazioni company list", "issues": ["company-delete-<vat> deletes right away with no confirmation dialog (Users page uses an AlertDialog). Deleting also removes that P.IVA's anagrafiche."]},
+      {"screen": "Sidebar (user role)", "issues": ["Before /companies loads, the sidebar briefly shows '— / P.IVA NON ASSEGNATA'. Show a loading state instead."]},
+      {"screen": "Users page", "issues": ["The SelectItem options in user-vat-select-<email> have no data-testid (new-user-vat-option-* exists only in the create dialog)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_multitenant.py", "/app/test_reports/pytest/pytest_multitenant.xml"],
+  "action_items": [
+    "Catch pymongo DuplicateKeyError in store_invoice and return status 'duplicate'",
+    "Fix truncation in the sidebar company-select trigger",
+    "Add a confirmation dialog for P.IVA deletion in Impostazioni",
+    "Update or remove the obsolete /api/settings tests in /app/backend/tests/backend_test.py and test_users_auth.py (endpoint removed). Upload/invoice tests there must now create a company and send the X-Company-Vat header"
+  ],
+  "critical_code_review_comments": [
+    "Tenant scoping is consistent: every data endpoint depends on get_tenant and filters by company_vat, and per-id lookups include company_vat (no IDOR).",
+    "get_tenant: an admin with a stale or invalid X-Company-Vat gets 400. The frontend falls back to data[0], so this is OK.",
+    "The anagrafiche upsert is scoped per company_vat with a unique compound index. The old global indexes are dropped at startup. Good.",
+    "server.py is 672 lines, close to the 700-line limit. Consider splitting the auth, users, companies and invoices routers."
+  ],
+  "updated_files": ["/app/backend/tests/test_multitenant.py"],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "Created companies 01234567890/05555555555/09999999999, users test_mt_*/test_ui_a@example.com and invoices during the tests. All deleted afterwards (companies=0, invoices=0, anagrafiche=0, users=1 admin).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/test_multitenant.py -n 0 (self-contained: it creates and cleans its own companies, users and invoices). The older backend_test.py and test_users_auth.py still reference the removed /api/settings and will fail on those tests. The admin needs the X-Company-Vat header for data endpoints. Sample lotto.zip contains 2 invoices from 01234567890 to a third party (rejected for P.IVA 05555555555) and a p7m."
+}

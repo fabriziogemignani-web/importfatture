@@ -23,6 +23,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 from pymongo import ASCENDING, DESCENDING
+from pymongo.errors import DuplicateKeyError
 
 from fattura_parser import extract_xml_files, parse_fattura
 from email_service import reset_email_html, send_email
@@ -438,7 +439,10 @@ async def store_invoice(inv: dict, raw_xml: str, filename: str, company_vat: str
         filename=filename, xml=raw_xml, dedup_key=dedup,
         created_at=datetime.now(timezone.utc),
     )
-    res = await db.invoices.insert_one(doc.to_mongo())
+    try:
+        res = await db.invoices.insert_one(doc.to_mongo())
+    except DuplicateKeyError:
+        return {"status": "duplicate", "message": "Fattura già presente in archivio", "numero": inv["numero"], "tipo": tipo}
     return {"status": "ok", "message": f"Fattura {tipo} importata", "numero": inv["numero"], "tipo": tipo, "id": str(res.inserted_id)}
 
 
