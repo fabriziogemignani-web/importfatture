@@ -27,6 +27,11 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 ## Implemented (2026-10-20)
 - Caricamento da cartella: pulsante "Carica da cartella" (webkitdirectory) + drag&drop di cartelle con lettura ricorsiva delle sottocartelle; filtro automatico .xml/.p7m/.zip
 
+## Implemented (2026-10-20) – Gestione utenti
+- Ruoli Amministratore/Utente; pagina /utenti (solo admin): crea, cambia ruolo, attiva/disattiva, imposta password, elimina (protezione ultimo admin e auto-modifica)
+- Recupero password via email (Emergent managed Resend): token hash sha256, scadenza 1h, monouso, max 3/h; invalidazione sessioni dopo cambio password
+- Impostazioni modificabili solo da admin
+
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
 - P1: Gestione utenti aggiuntivi da admin

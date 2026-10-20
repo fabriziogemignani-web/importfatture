@@ -115,8 +115,21 @@ def verify_password(p: str, h: str) -> bool:
 
 
 def _token(payload: dict, delta: timedelta) -> str:
-    payload = {**payload, "exp": datetime.now(timezone.utc) + delta}
+    now = datetime.now(timezone.utc)
+    payload = {**payload, "iat": int(now.timestamp()), "exp": now + delta}
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALGORITHM)
+
+
+def _session_valid(payload: dict, user: Optional[dict]) -> bool:
+    return bool(user) and user.get("active", True) and payload.get("iat", 0) >= user.get("pwd_at", 0)
+
+
+async def _set_password(oid: ObjectId, password: str):
+    u = await db.users.find_one_and_update(
+        {"_id": oid}, {"$set": {"password_hash": hash_password(password), "pwd_at": int(datetime.now(timezone.utc).timestamp())}})
+    if u:
+        await db.login_attempts.delete_many({"identifier": {"$regex": f":{re.escape(u['email'])}$"}})
+    return u
 
 
 def set_auth_cookies(response: Response, user_id: str, email: str):
@@ -147,7 +160,7 @@ async def get_current_user(request: Request) -> dict:
     if payload.get("type") != "access":
         raise HTTPException(401, "Token non valido")
     user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
-    if not user or not user.get("active", True):
+    if not _session_valid(payload, user):
         raise HTTPException(401, "Utente non trovato o disattivato")
     return _public_user(user)
 
@@ -161,7 +174,8 @@ async def require_admin(user=Depends(get_current_user)) -> dict:
 @api.post("/auth/login")
 async def login(body: LoginIn, request: Request, response: Response):
     email = body.email.strip().lower()
-    ident = f"{request.client.host if request.client else 'x'}:{email}"
+    fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    ident = f"{fwd or (request.client.host if request.client else 'x')}:{email}"
     att = await db.login_attempts.find_one({"identifier": ident})
     now = datetime.now(timezone.utc)
     if att and att.get("count", 0) >= 5:
@@ -204,7 +218,7 @@ async def refresh(request: Request, response: Response):
     if payload.get("type") != "refresh":
         raise HTTPException(401, "Token non valido")
     user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
-    if not user or not user.get("active", True):
+    if not _session_valid(payload, user):
         raise HTTPException(401, "Utente non trovato o disattivato")
     set_auth_cookies(response, str(user["_id"]), user["email"])
     return _public_user(user)
@@ -226,10 +240,14 @@ async def forgot_password(body: ForgotIn):
     if recent >= 3:
         return msg
     token = secrets.token_urlsafe(32)
-    await db.password_reset_tokens.insert_one({"token_hash": _hash_token(token), "user_id": str(user["_id"]), "used": False,
-                                               "created_at": now, "expires_at": now + timedelta(hours=1)})
+    res = await db.password_reset_tokens.insert_one({"token_hash": _hash_token(token), "user_id": str(user["_id"]), "used": False,
+                                                     "created_at": now, "expires_at": now + timedelta(hours=1)})
     link = f"{os.environ['APP_URL'].rstrip('/')}/reset-password?token={token}"
-    await send_email(to=email, subject="Reimposta la tua password", html=reset_email_html(user.get("name", ""), link))
+    try:
+        await send_email(to=email, subject="Reimposta la tua password", html=reset_email_html(user.get("name", ""), link))
+    except HTTPException as e:
+        logger.error(f"Reset email not sent: {e.detail}")
+        await db.password_reset_tokens.delete_one({"_id": res.inserted_id})
     return msg
 
 
@@ -240,7 +258,7 @@ async def reset_password(body: ResetIn):
     exp = rec["expires_at"].replace(tzinfo=timezone.utc) if rec and rec["expires_at"].tzinfo is None else (rec or {}).get("expires_at")
     if not rec or rec["used"] or exp < now:
         raise HTTPException(400, "Link non valido o scaduto. Richiedine uno nuovo.")
-    await db.users.update_one({"_id": ObjectId(rec["user_id"])}, {"$set": {"password_hash": hash_password(body.password)}})
+    await _set_password(ObjectId(rec["user_id"]), body.password)
     await db.password_reset_tokens.update_many({"user_id": rec["user_id"]}, {"$set": {"used": True}})
     return {"ok": True}
 
@@ -286,8 +304,7 @@ async def update_user(user_id: str, body: UserUpdate, admin=Depends(require_admi
 
 @api.post("/users/{user_id}/password")
 async def set_user_password(user_id: str, body: PasswordIn, admin=Depends(require_admin)):
-    res = await db.users.update_one({"_id": _oid(user_id)}, {"$set": {"password_hash": hash_password(body.password)}})
-    if not res.matched_count:
+    if not await _set_password(_oid(user_id), body.password):
         raise HTTPException(404, "Utente non trovato")
     return {"ok": True}
 
@@ -302,6 +319,7 @@ async def delete_user(user_id: str, admin=Depends(require_admin)):
     res = await db.users.delete_one({"_id": oid})
     if not res.deleted_count:
         raise HTTPException(404, "Utente non trovato")
+    await db.password_reset_tokens.delete_many({"user_id": user_id})
     return {"ok": True}
 
 
@@ -581,8 +599,7 @@ async def startup():
     if not existing:
         await db.users.insert_one({"email": email, "password_hash": hash_password(pwd), "name": "Admin", "role": "admin",
                                    "created_at": datetime.now(timezone.utc)})
-    elif not verify_password(pwd, existing["password_hash"]):
-        await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(pwd)}})
+    await db.users.update_one({"email": email}, {"$set": {"role": "admin", "active": True}})
 
 
 @app.on_event("shutdown")

@@ -1,0 +1,36 @@
+{
+  "summary": "Tested user management (admin CRUD, roles, active toggle, set password, delete, self/last-admin protections), RBAC (403 on /api/users* and PUT /api/settings, nav hidden, /utenti redirect, Settings read-only), forgot-password (generic message, hashed token, real Resend send 202, rate limit 3/h) and reset-password (validation, valid single-use, invalid/expired tokens) via 23 pytest tests + 4 Playwright flows. All passed. Light regression OK: login/logout, dashboard, attive/passive/anagrafiche pages load.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/login", "issue": "Brute-force lockout key uses request.client.host, which is the ingress/pod IP (seen 10.201.1.194 and 10.201.4.160 for the same client). Failed-attempt counters are split across ingress IPs, so an attacker gets about 5 x N attempts and lockout is inconsistent (7 bad attempts gave 7x 401 and no 429). Use the first X-Forwarded-For IP, or key on email alone."},
+      {"endpoint": "POST /api/auth/forgot-password", "issue": "If send_email fails (502/503/500), the error is returned only for registered emails, which reveals which emails exist. The token is also already inserted and counts toward the 3/h limit. Catch the error, log it, still return the generic message, and/or insert the token only after a successful send."},
+      {"endpoint": "POST /api/auth/reset-password", "issue": "Existing sessions stay valid after a password reset or after an admin sets a password (stateless JWT, refresh token valid 7 days). login_attempts lockout is not cleared on reset. Consider a token_version/password_changed_at check."},
+      {"endpoint": "DELETE /api/users/{id}", "issue": "The deleted user's password_reset_tokens are not removed (orphans remain until TTL)."},
+      {"endpoint": "startup seed_admin", "issue": "Only resets the password. It does not force role=admin/active=true on an existing admin doc."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Users page", "issues": ["Sonner toast (top-right) covers the 'Nuovo utente' button for a few seconds after every action"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_users_auth.py", "/app/test_reports/pytest/pytest_users_auth.xml"],
+  "action_items": [
+    "Use the real client IP (X-Forwarded-For) or an email-only key for login lockout",
+    "Make forgot-password always return the generic message even if the email send fails",
+    "Optional: invalidate sessions after a password reset/change; delete reset tokens when a user is deleted"
+  ],
+  "critical_code_review_comments": [
+    "pytest.ini enables xdist (-n --dist loadscope). Stateful test classes need -n 0 or the same scope. Run test_users_auth.py with -n 0.",
+    "Users page has no loading/error state on the initial GET /users (load() has no catch)."
+  ],
+  "updated_files": ["/app/backend/tests/test_users_auth.py"],
+  "success_rate": {"backend": "100% (22 passed, 1 skipped because the 3/h rate limit was reached after the first run, which itself sent successfully)", "frontend": "100%"},
+  "seed_data_creation": "Created test_user_pytest@example.com, test_admin2_pytest@example.com, test_ui_user@example.com; all deleted. delivered@resend.dev deleted per request. Only the admin user remains. Orphan reset tokens cleaned.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/test_users_auth.py -n 0. It needs delivered@resend.dev to exist for the forgot-password real-send test (otherwise it skips). Valid reset tokens are inserted directly into Mongo. DB currently has no invoices and company VAT is not set (sidebar shows 'P.IVA NON IMPOSTATA')."
+}
