@@ -1,0 +1,18 @@
+{
+  "summary": "Retested the iteration_10 follow-ups on the LOCAL DB. CORS: preflight OPTIONS /api/auth/login from https://evil.example.com returns ACAO '*' with no Allow-Credentials (checked through the public ingress with curl too). GET /api/auth/me from the evil origin with a Cookie header returns ACAO 'https://evil.example.com' (Starlette reflects the origin when allow_all_origins is set and a cookie is present) but with NO Allow-Credentials, so browsers block credentialed reads. The required 'ACAO evil + credentials' combination never occurs. Soft-merge: seeded 2 identical clienti (company 01192570453, chiave 01428910457) with 1 invoice each after dropping the indexes, then restarted the backend. The log shows 'Soft-merged 1 duplicate', and soft_merge_repro verify is ALL OK. GET /api/anagrafiche (no ruolo) returns only the kept id. GET /api/anagrafiche/<merged> returns 404. Kept detail returns 200 with riepilogo attiva {n:2, totale:150.5}. Deleting the 1st invoice keeps both docs. Deleting the 2nd removes both the kept and the merged sibling (0 anagrafiche left, n_clienti 0, list empty). Pytest: 7/7. UI end-to-end on the preview URL, re-seeded: login, company selector, dashboard (150,50 EUR, 1/0, chart, recent), upload of 1 XML (1 importate), Fatture Attive (3 rows, 1370,50 EUR), Anagrafiche Clienti (1 row, 3 docs, 1370,50 EUR), Fornitori empty state, detail page, logout, forgot-password page and back link, and the redirect to /login after logout. The only API 4xx responses were the expected 401s on /auth/me and /auth/refresh when logged out. All TEST data cleaned up; the DB holds only the admin user.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_cors_softmerge_iter11.py", "/app/backend/tests/soft_merge_repro.py", "/app/test_reports/pytest/iteration_11.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CORS: allow_credentials='*' not in CORS_ORIGINS is safe. For production, consider setting explicit origins in CORS_ORIGINS (e.g. APP_URL) if cross-origin use is ever needed. Today the app is same-origin, so credentials are not needed for CORS.",
+    "list_anagrafiche, get_anagrafica and delete_invoice all handle merged_into correctly. merged_into is stored as a string, which matches controparte_id (also a string)."
+  ],
+  "updated_files": ["/app/backend/tests/test_cors_softmerge_iter11.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100%"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / FattureXML2026 (unchanged)",
+  "seed_data_creation": "Created and then removed company 01192570453, 2 anagrafiche and up to 3 invoices. The DB holds only the admin user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Flow: python soft_merge_repro.py seed, then sudo supervisorctl restart backend, then pytest test_cors_softmerge_iter11.py -n0 -s. The delete-cascade test consumes the seed, so re-seed and restart before running the UI checks, then run python soft_merge_repro.py cleanup. The older test_soft_merge_dedup.py::test_login_cookies/test_cors_preflight expect ACAO=BASE + credentials and are now obsolete with CORS_ORIGINS='*'."
+}
