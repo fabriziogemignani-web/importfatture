@@ -42,6 +42,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Avvio robusto: se l'indice unico anagrafiche fallisce, ripete il dedup e in ultima istanza registra l'errore senza bloccare l'avvio
 - Deploy readiness: dedup_anagrafiche ora non cancella (soft-merge: merged_into, ruoli [], chiave suffissata); CORS da CORS_ORIGINS
 - CORS sicuro: con CORS_ORIGINS="*" le credenziali cross-origin sono disattivate (app same-origin); anagrafiche unite nascoste da lista e dettaglio
+- Code review 2: useMemo sui context, costanti grafico, try/else in store_invoice, root inizializzato nel parser
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA

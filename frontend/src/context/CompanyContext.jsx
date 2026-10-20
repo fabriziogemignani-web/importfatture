@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -16,11 +16,11 @@ export const CompanyProvider = ({ children }) => {
   const [active, setActiveState] = useState("");
 
   const storageKey = `${KEY}:${user?.id}`;
-  const setActive = (vat) => {
+  const setActive = useCallback((vat) => {
     applyHeader(vat);
     localStorage.setItem(storageKey, vat);
     setActiveState(vat);
-  };
+  }, [storageKey]);
 
   const reload = useCallback(async () => {
     applyHeader("");
@@ -38,12 +38,11 @@ export const CompanyProvider = ({ children }) => {
     reload().catch(() => setCompanies([]));
   }, [reload]);
 
-  const current = (companies || []).find((c) => c.company_vat === active);
-  return (
-    <CompanyContext.Provider value={{ companies, active, current, setActive, reload }}>
-      {children}
-    </CompanyContext.Provider>
-  );
+  const value = useMemo(() => {
+    const current = (companies || []).find((c) => c.company_vat === active);
+    return { companies, active, current, setActive, reload };
+  }, [companies, active, setActive, reload]);
+  return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>;
 };
 
 export const useCompany = () => useContext(CompanyContext);

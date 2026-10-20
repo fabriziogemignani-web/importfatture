@@ -487,7 +487,8 @@ async def store_invoice(inv: dict, raw_xml: str, filename: str, company_vat: str
         res = await db.invoices.insert_one(doc.to_mongo())
     except DuplicateKeyError:
         return {"status": "duplicate", "message": "Fattura già presente in archivio", "numero": inv["numero"], "tipo": tipo}
-    return {"status": "ok", "message": f"Fattura {tipo} importata", "numero": inv["numero"], "tipo": tipo, "id": str(res.inserted_id)}
+    else:
+        return {"status": "ok", "message": f"Fattura {tipo} importata", "numero": inv["numero"], "tipo": tipo, "id": str(res.inserted_id)}
 
 
 @api.post("/invoices/upload")

@@ -9,6 +9,10 @@ import { api, fmtEUR } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
+const TICK_X = { fontSize: 12 };
+const TICK_Y = { fontSize: 11 };
+const BAR_RADIUS = [4, 4, 0, 0];
+const fmtTooltip = (v) => fmtEUR(v);
 
 const Stat = ({ label, value, sub, accent, testid }) => (
   <Panel className="p-5" data-testid={testid}>
@@ -60,12 +64,12 @@ export default function Dashboard() {
             <ResponsiveContainer>
               <BarChart data={chart}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="mese" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 11 }} width={70} />
-                <Tooltip formatter={(v) => fmtEUR(v)} />
+                <XAxis dataKey="mese" tick={TICK_X} />
+                <YAxis tick={TICK_Y} width={70} />
+                <Tooltip formatter={fmtTooltip} />
                 <Legend />
-                <Bar dataKey="attiva" name="Attive" fill="#059669" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="passiva" name="Passive" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="attiva" name="Attive" fill="#059669" radius={BAR_RADIUS} />
+                <Bar dataKey="passiva" name="Passive" fill="#4f46e5" radius={BAR_RADIUS} />
               </BarChart>
             </ResponsiveContainer>
           </div>

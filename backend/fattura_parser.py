@@ -110,6 +110,7 @@ def natural_key(numero: str) -> str:
 
 
 def _parse_root(xml_bytes: bytes) -> Element:
+    root: Optional[Element] = None
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as e:
