@@ -512,7 +512,8 @@ async def delete_invoice(invoice_id: str, user=Depends(get_current_user)):
 
 # ---------- Anagrafiche ----------
 @api.get("/anagrafiche")
-async def list_anagrafiche(ruolo: Optional[str] = None, q: Optional[str] = None, user=Depends(get_current_user)):
+async def list_anagrafiche(ruolo: Optional[str] = None, q: Optional[str] = None, anno: Optional[int] = None,
+                           user=Depends(get_current_user)):
     query = {}
     if ruolo:
         query["ruoli"] = ruolo
@@ -520,13 +521,21 @@ async def list_anagrafiche(ruolo: Optional[str] = None, q: Optional[str] = None,
         rx = {"$regex": re.escape(q.strip()), "$options": "i"}
         query["$or"] = [{"denominazione": rx}, {"chiave": rx}, {"codice_fiscale": rx}, {"comune": rx}]
     docs = await db.anagrafiche.find(query).sort("denominazione", ASCENDING).to_list(2000)
+    inv_match = {}
+    if ruolo:
+        inv_match["tipo"] = "attiva" if ruolo == "cliente" else "passiva"
+    if anno:
+        inv_match["anno"] = anno
     counts = {c["_id"]: c async for c in db.invoices.aggregate([
+        {"$match": inv_match},
         {"$group": {"_id": "$controparte_id", "n": {"$sum": 1}, "totale": {"$sum": "$totale"}}}
     ])}
     out = []
     for d in docs:
         a = Anagrafica.from_mongo(d).model_dump()
         c = counts.get(a["id"], {})
+        if anno and not c:
+            continue
         a["n_fatture"] = c.get("n", 0)
         a["totale_fatture"] = round(c.get("totale", 0), 2)
         out.append(a)

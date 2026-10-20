@@ -31,6 +31,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Ruoli Amministratore/Utente; pagina /utenti (solo admin): crea, cambia ruolo, attiva/disattiva, imposta password, elimina (protezione ultimo admin e auto-modifica)
 - Recupero password via email (Emergent managed Resend): token hash sha256, scadenza 1h, monouso, max 3/h; invalidazione sessioni dopo cambio password
 - Impostazioni modificabili solo da admin
+- Anagrafiche: etichette anno, riepilogo n. anagrafiche/documenti/importo totale, conteggi per anno e per tipo (clienti=attive, fornitori=passive)
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA

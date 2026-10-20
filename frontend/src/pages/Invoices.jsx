@@ -9,7 +9,7 @@ import { api, downloadFile, fmtEUR, formatApiError } from "@/lib/api";
 
 const LIMIT = 50;
 
-const YearTabs = ({ years, value, onChange }) => (
+export const YearTabs = ({ years, value, onChange }) => (
   <div className="flex flex-wrap gap-2" data-testid="year-tabs">
     {["tutti", ...years].map((y) => (
       <button key={y} onClick={() => onChange(y)} data-testid={`year-tab-${y}`}
