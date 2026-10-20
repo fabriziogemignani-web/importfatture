@@ -444,8 +444,9 @@ async def split_anagrafiche() -> None:
 
 
 async def dedup_anagrafiche() -> None:
-    """Collapse duplicate (company_vat, ruolo, chiave) records before building the unique index."""
+    """Collapse duplicate (company_vat, ruolo, chiave) records before building the unique index (soft merge, no deletes)."""
     groups = db.anagrafiche.aggregate([
+        {"$match": {"merged_into": {"$exists": False}}},
         {"$group": {"_id": {"v": "$company_vat", "r": "$ruolo", "c": "$chiave"}, "ids": {"$push": "$_id"}, "n": {"$sum": 1}}},
         {"$match": {"n": {"$gt": 1}}},
     ])
@@ -454,8 +455,10 @@ async def dedup_anagrafiche() -> None:
         await db.invoices.update_many(
             {"company_vat": g["_id"]["v"], "controparte_id": {"$in": [str(d) for d in dupes]}},
             {"$set": {"controparte_id": str(keep)}})
-        await db.anagrafiche.delete_many({"_id": {"$in": dupes}})
-        logger.info(f"Merged {len(dupes)} duplicate anagrafiche into {keep}")
+        for d in dupes:
+            await db.anagrafiche.update_one({"_id": d}, {"$set": {
+                "merged_into": str(keep), "ruoli": [], "ruolo": "unita", "chiave": f"{g['_id']['c']}#unita#{d}"}})
+        logger.info(f"Soft-merged {len(dupes)} duplicate anagrafiche into {keep}")
 
 
 async def store_invoice(inv: dict, raw_xml: str, filename: str, company_vat: str) -> dict:
@@ -685,7 +688,7 @@ app.include_router(api)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ["FRONTEND_URL"].split(","),
+    allow_origins=os.environ["CORS_ORIGINS"].split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

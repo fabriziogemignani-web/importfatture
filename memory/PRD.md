@@ -40,6 +40,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Anagrafiche separate per ruolo: un'azienda che è sia cliente sia fornitore ha due schede distinte (indice unico company_vat+ruolo+chiave); migrazione automatica all'avvio che divide le schede unite e riassegna le fatture
 - Fix deploy: dedup_anagrafiche() all'avvio unisce schede duplicate (company_vat, ruolo, chiave) e riassegna le fatture prima di creare l'indice unico
 - Avvio robusto: se l'indice unico anagrafiche fallisce, ripete il dedup e in ultima istanza registra l'errore senza bloccare l'avvio
+- Deploy readiness: dedup_anagrafiche ora non cancella (soft-merge: merged_into, ruoli [], chiave suffissata); CORS da CORS_ORIGINS
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
