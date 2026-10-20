@@ -95,7 +95,7 @@ export default function Anagrafiche() {
             </TableRow></TableHeader>
             <TableBody>
               {sortItems(items, sort).map((a) => (
-                <TableRow key={a.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/anagrafiche/${a.id}`)} data-testid={`anagrafica-row-${a.id}`}>
+                <TableRow key={a.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/anagrafiche/${a.id}?ruolo=${ruolo}`)} data-testid={`anagrafica-row-${a.id}`}>
                   <TableCell className="font-medium">{a.denominazione}</TableCell>
                   <TableCell className="font-mono text-xs">{a.chiave}</TableCell>
                   <TableCell className="text-slate-600">{a.comune} {a.provincia && `(${a.provincia})`}</TableCell>

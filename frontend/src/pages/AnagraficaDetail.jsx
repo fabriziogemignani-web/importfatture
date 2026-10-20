@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/common";
@@ -10,30 +10,51 @@ const Field = ({ label, value }) => value ? (
   <div><dt className="font-mono text-[11px] uppercase tracking-wider text-slate-500">{label}</dt><dd className="mt-0.5 text-sm">{value}</dd></div>
 ) : null;
 
+const RoleSwitch = ({ ruoli, ruolo, onChange }) => (
+  <div className="flex gap-2">
+    {ruoli.map((r) => (
+      <button key={r} onClick={() => onChange(r)} data-testid={`anagrafica-role-${r}`}
+        className={`rounded-md border px-2 py-0.5 text-xs capitalize transition-colors ${r === ruolo ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-400"}`}>
+        {r}
+      </button>
+    ))}
+  </div>
+);
+
 export default function AnagraficaDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const [a, setA] = useState(null);
   const [invoices, setInvoices] = useState([]);
 
   useEffect(() => {
     api.get(`/anagrafiche/${id}`).then((r) => setA(r.data));
-    api.get("/invoices", { params: { anagrafica_id: id, order: "desc", limit: 200 } }).then((r) => setInvoices(r.data.items));
   }, [id]);
 
+  const ruolo = a && (a.ruoli.includes(params.get("ruolo")) ? params.get("ruolo") : a.ruoli[0]);
+  const tipo = ruolo === "fornitore" ? "passiva" : "attiva";
+
+  useEffect(() => {
+    if (!ruolo) {
+      return;
+    }
+    api.get("/invoices", { params: { anagrafica_id: id, tipo, order: "desc", limit: 200 } }).then((r) => setInvoices(r.data.items));
+  }, [id, ruolo, tipo]);
+
   if (!a) return <div className="text-slate-500">Caricamento…</div>;
-  const att = a.riepilogo?.attiva || { n: 0, totale: 0 };
-  const pas = a.riepilogo?.passiva || { n: 0, totale: 0 };
+  const tot = a.riepilogo?.[tipo] || { n: 0, totale: 0 };
+  const isCliente = ruolo === "cliente";
 
   return (
     <div className="fade-up">
       <button onClick={() => navigate(-1)} className="mb-4 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900" data-testid="anagrafica-back-button"><ArrowLeft size={16} /> Indietro</button>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex gap-2">{a.ruoli.map((r) => <span key={r} className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs capitalize">{r}</span>)}</div>
+          <RoleSwitch ruoli={a.ruoli} ruolo={ruolo} onChange={(r) => setParams({ ruolo: r }, { replace: true })} />
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl" data-testid="anagrafica-name">{a.denominazione}</h1>
         </div>
-        <Button variant="outline" onClick={() => downloadFile("/invoices/export", { anagrafica_id: id, order: "desc" }, "fatture.csv")} data-testid="anagrafica-export-csv"><Download className="mr-2 h-4 w-4" />Esporta CSV</Button>
+        <Button variant="outline" onClick={() => downloadFile("/invoices/export", { anagrafica_id: id, tipo, order: "desc" }, "fatture.csv")} data-testid="anagrafica-export-csv"><Download className="mr-2 h-4 w-4" />Esporta CSV</Button>
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Panel className="p-5 lg:col-span-2" data-testid="anagrafica-info">
@@ -50,17 +71,14 @@ export default function AnagraficaDetail() {
           </dl>
         </Panel>
         <Panel className="p-5" data-testid="anagrafica-totals">
-          <div className="font-mono text-[11px] uppercase tracking-wider text-slate-500">Fatturato attivo</div>
-          <div className="mt-1 text-2xl font-bold text-emerald-700 tabular-nums">{fmtEUR(att.totale)}</div>
-          <div className="text-xs text-slate-500">{att.n} fatture</div>
-          <div className="mt-5 font-mono text-[11px] uppercase tracking-wider text-slate-500">Acquisti passivi</div>
-          <div className="mt-1 text-2xl font-bold text-indigo-700 tabular-nums">{fmtEUR(pas.totale)}</div>
-          <div className="text-xs text-slate-500">{pas.n} fatture</div>
+          <div className="font-mono text-[11px] uppercase tracking-wider text-slate-500">{isCliente ? "Fatture attive (vendite)" : "Fatture passive (acquisti)"}</div>
+          <div className={`mt-1 text-2xl font-bold tabular-nums ${isCliente ? "text-emerald-700" : "text-indigo-700"}`} data-testid="anagrafica-total-amount">{fmtEUR(tot.totale)}</div>
+          <div className="text-xs text-slate-500" data-testid="anagrafica-total-docs">{tot.n} fatture</div>
         </Panel>
       </div>
       <Panel className="mt-6 overflow-hidden">
-        <div className="border-b border-slate-200 p-4 text-sm font-semibold">Storico fatture</div>
-        <InvoiceTable items={invoices} showTipo />
+        <div className="border-b border-slate-200 p-4 text-sm font-semibold">Storico fatture {isCliente ? "attive" : "passive"}</div>
+        <InvoiceTable items={invoices} />
       </Panel>
     </div>
   );

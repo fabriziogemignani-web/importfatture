@@ -90,7 +90,7 @@ export default function InvoiceDetail() {
 
   if (!inv) return <div className="text-slate-500" data-testid="invoice-loading">Caricamento…</div>;
   const isAttiva = inv.tipo === "attiva";
-  const link = inv.controparte_id && `/anagrafiche/${inv.controparte_id}`;
+  const link = inv.controparte_id && `/anagrafiche/${inv.controparte_id}?ruolo=${isAttiva ? "cliente" : "fornitore"}`;
   const remove = async () => {
     await api.delete(`/invoices/${id}`);
     toast.success("Fattura eliminata");
