@@ -1,0 +1,18 @@
+{
+  "summary": "Regression test after the code-review refactor (fattura_parser split into helpers, ResultsPanel extraction, stable keys, env-based test credentials). Backend: the existing suites test_multitenant.py and test_users_auth.py ran serially with credentials read from env: 41 passed, 2 skipped. The new test_parser_regression.py passed 10/10. It covers sample XML field mapping (numero/data/anno/totali/righe/riepilogo/pagamenti/cedente/cessionario/trasmissione), multi-body XML, BOM, Nome+Cognome, the totale fallback when ImportoTotaleDocumento is missing, multiple Causale, errors (invalid XML, non-FatturaElettronica, missing header/body/numero), p7m decode and bad p7m, nested zip inside zip, skipping __MACOSX and hidden files, bad zip, unsupported format, and end-to-end upload with persistence and duplicate detection. Frontend (Playwright, desktop): the upload results panel shows counts (3 ok / 2 duplicate / 2 errors) and per-file rows with tipo badge, numero, message and 3 'Apri' links. Folder upload with a real directory and subfolder works ('2 file supportati su 3 trovati', .txt filtered out). The invoice detail page renders cedente, cessionario, causale, righe, riepilogo IVA, pagamento and totale correctly. The XML toggle shows the raw XML and switches back. Isolation: test_single sees only its own P.IVA (static sidebar), and a request with another P.IVA header returns 403. Auth basics: bcrypt $2b$, httpOnly cookies set, CORS uses an explicit origin with credentials. No bugs found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_parser_regression.py", "/app/backend/tests/test_multitenant.py", "/app/backend/tests/test_users_auth.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "InvoiceDetail Summary key `iva-${aliquota}-${natura}` can collide when a FatturaPA has two DatiRiepilogo blocks with the same aliquota and natura (for example the same Natura N2.2 with a different RiferimentoNormativo, or different EsigibilitaIVA). This would only cause a React duplicate-key warning. Consider adding the index or riferimento_normativo to the key.",
+    "Righe key falls back to the index only when numero_linea is empty. Duplicate NumeroLinea values (seen in some non-compliant generators) would collide. Low risk.",
+    "The refactored parser behaves exactly like before for every case tested; the type hints are fine."
+  ],
+  "updated_files": ["/app/backend/tests/test_parser_regression.py"],
+  "success_rate": {"backend": "100% (51/51 + 2 skipped)", "frontend": "100%"},
+  "seed_data_creation": "Used seed_multivat_ui.py seed for UI tests, plus temporary company 01234567890 in test_parser_regression (removed by its fixture). Everything was cleaned up afterwards; the DB holds only the admin (0 companies/invoices/anagrafiche).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_multitenant.py backend/tests/test_users_auth.py backend/tests/test_parser_regression.py -n 0`. Note that test_parser_regression and test_multitenant both use VAT 01234567890, so do not run them in parallel. For Playwright set_input_files, use only buffers (you cannot mix paths and buffers). For the webkitdirectory input, pass a real directory path. Admin password was not changed and forgot-password was not triggered."
+}
