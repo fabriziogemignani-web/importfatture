@@ -1,0 +1,22 @@
+{
+  "summary": "Tested linking one user to multiple P.IVA (company_vats list), backend and frontend. Backend: test_multitenant.py was moved to company_vats and gained a multi-P.IVA test; test_users_auth.py was updated for the new model. Result: 41 passed, 2 skipped, run serially. Frontend (Playwright, desktop and mobile): the multi-P.IVA user sees company-select with only their 2 P.IVA. Switching updates dashboard, attive, passive, anagrafiche and upload. The choice persists after reload (localStorage activeCompanyVat:<userId>). A stale saved P.IVA falls back to the first allowed one. The single-P.IVA user sees the static sidebar-company. The admin sees all 3 P.IVA. On the Users page the multi-select adds/removes P.IVA and saves it. Removing the last P.IVA shows the toast 'Un utente deve essere collegato ad almeno una P.IVA' and the checkbox stays checked. In the new-user dialog, submitting without a P.IVA keeps the dialog open with the error toast; with 2 P.IVA the user is created with both. Upload: same invoice in A -> duplicate; in B (not cedente/cessionario) -> error. Regression: login and invoice detail OK. No bugs found.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "tests/backend_test.py", "issue": "Old pre-multitenant suite (uses removed /api/settings and the old single-company model); about 24 tests fail because they are outdated, not because of app bugs. Should be deleted or rewritten."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_multitenant.py", "/app/backend/tests/test_users_auth.py", "/app/backend/tests/seed_multivat_ui.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Delete or rewrite /app/backend/tests/backend_test.py (obsolete /api/settings model)"
+  ],
+  "critical_code_review_comments": [
+    "Users.jsx VatMultiSelect sends a PATCH on every checkbox toggle using the row's value prop. If the admin clicks quickly before the list refreshes, the second PATCH is built from a stale value and the first change can be lost. Consider optimistic local state or disabling the select while a request is in flight.",
+    "CompanyContext: if the admin unlinks the P.IVA a user is currently viewing, that user's requests return 403 until the page is reloaded. Consider handling 403 'Non hai accesso a questa P.IVA' by calling reload().",
+    "get_tenant for admin: `next(iter(user['company_vats']))` fallback is fine; the admin without a header still gets 400 (intended)."
+  ],
+  "updated_files": ["/app/backend/tests/test_multitenant.py", "/app/backend/tests/test_users_auth.py", "/app/backend/tests/seed_multivat_ui.py"],
+  "success_rate": {"backend": "100% (41/41 in multitenant + users_auth suites)", "frontend": "100%"},
+  "seed_data_creation": "Used seed_multivat_ui.py seed (companies 01234567890/05555555555/09999999999 and users test_multi, test_single). Everything was removed afterwards with 'clean'; the DB now holds only the admin.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run pytest serially: `pytest backend/tests/test_multitenant.py backend/tests/test_users_auth.py -n 0`, because pytest.ini forces xdist -n 2 and the shared module fixtures conflict across workers. Rebuild UI test data with `python /app/backend/tests/seed_multivat_ui.py seed` and remove it with `clean`. Admin password never changed; forgot-password not triggered."
+}

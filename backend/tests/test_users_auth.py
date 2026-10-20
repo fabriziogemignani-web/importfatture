@@ -30,6 +30,7 @@ mdb = MongoClient(_env["MONGO_URL"])[_env["DB_NAME"]]
 U_EMAIL = "test_user_pytest@example.com"
 U2_EMAIL = "test_admin2_pytest@example.com"
 U_PW = "TestPass123"
+TEST_VAT = "08888888888"
 
 
 def login(email, pw):
@@ -48,6 +49,7 @@ def admin():
 
 @pytest.fixture(scope="module", autouse=True)
 def cleanup():
+    mdb.companies.update_one({"_id": TEST_VAT}, {"$setOnInsert": {"name": "TEST Auth Co", "created_at": datetime.now(timezone.utc)}}, upsert=True)
     mdb.users.delete_many({"email": {"$in": [U_EMAIL, U2_EMAIL]}})
     mdb.login_attempts.delete_many({"identifier": {"$regex": "pytest"}})
     yield
@@ -56,6 +58,7 @@ def cleanup():
         if u:
             mdb.password_reset_tokens.delete_many({"user_id": str(u["_id"])})
     mdb.users.delete_many({"email": {"$in": [U_EMAIL, U2_EMAIL]}})
+    mdb.companies.delete_one({"_id": TEST_VAT})
 
 
 def _uid(email):
@@ -88,7 +91,7 @@ class TestAuthPlaybook:
 # --- Admin user CRUD ---
 class TestUsersCRUD:
     def test_create_user(self, admin):
-        r = admin.post(f"{API}/users", json={"email": U_EMAIL, "name": "TEST_User", "role": "user", "password": U_PW})
+        r = admin.post(f"{API}/users", json={"email": U_EMAIL, "name": "TEST_User", "role": "user", "password": U_PW, "company_vats": [TEST_VAT]})
         assert r.status_code == 200, r.text
         d = r.json()
         assert d["email"] == U_EMAIL and d["role"] == "user" and d["active"] is True
@@ -116,9 +119,9 @@ class TestUsersCRUD:
         assert s.patch(f"{API}/users/{_uid(ADMIN_EMAIL)}", json={"role": "user"}).status_code == 403
         assert s.delete(f"{API}/users/{_uid(ADMIN_EMAIL)}").status_code == 403
         assert s.post(f"{API}/users/{_uid(ADMIN_EMAIL)}/password", json={"password": "Hacked1234"}).status_code == 403
-        assert s.put(f"{API}/settings", json={"company_vat": "01234567890"}).status_code == 403
+        assert s.post(f"{API}/companies", json={"company_vat": "01234567890"}).status_code == 403
         # non-admin can still read archive
-        assert s.get(f"{API}/settings").status_code == 200
+        assert s.get(f"{API}/companies").status_code == 200
         assert s.get(f"{API}/invoices").status_code == 200
 
     def test_change_role_and_back(self, admin):

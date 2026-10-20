@@ -58,7 +58,7 @@ def setup(adm):
         r = adm.post(f"{API}/companies", json={"company_vat": v, "company_name": n})
         assert r.status_code == 200, r.text
     for e, v in ((UA, A), (UB, B)):
-        r = adm.post(f"{API}/users", json={"email": e, "name": "T", "role": "user", "password": PWD, "company_vat": v})
+        r = adm.post(f"{API}/users", json={"email": e, "name": "T", "role": "user", "password": PWD, "company_vats": [v]})
         assert r.status_code == 200, r.text
     return True
 
@@ -101,21 +101,21 @@ class TestUsersVat:
         assert r.status_code == 400
 
     def test_unknown_vat(self, adm, setup):
-        r = adm.post(f"{API}/users", json={"email": "test_mt_x@example.com", "role": "user", "password": PWD, "company_vat": "07777777777"})
+        r = adm.post(f"{API}/users", json={"email": "test_mt_x@example.com", "role": "user", "password": PWD, "company_vats": ["07777777777"]})
         assert r.status_code == 400
 
     def test_admin_without_vat(self, adm, setup):
         r = adm.post(f"{API}/users", json={"email": "test_mt_adm@example.com", "role": "admin", "password": PWD})
-        assert r.status_code == 200 and r.json()["company_vat"] == ""
+        assert r.status_code == 200 and r.json()["company_vats"] == []
 
     def test_change_vat(self, adm, setup):
         uid = [u for u in adm.get(f"{API}/users").json() if u["email"] == UB][0]["id"]
-        r = adm.patch(f"{API}/users/{uid}", json={"company_vat": C})
-        assert r.status_code == 200 and r.json()["company_vat"] == C
-        r = adm.patch(f"{API}/users/{uid}", json={"company_vat": ""})
-        assert r.status_code == 400
-        r = adm.patch(f"{API}/users/{uid}", json={"company_vat": f"IT{B}"})
-        assert r.status_code == 200 and r.json()["company_vat"] == B
+        r = adm.patch(f"{API}/users/{uid}", json={"company_vats": [C]})
+        assert r.status_code == 200 and r.json()["company_vats"] == [C]
+        r = adm.patch(f"{API}/users/{uid}", json={"company_vats": []})
+        assert r.status_code == 400 and "almeno una P.IVA" in r.json()["detail"]
+        r = adm.patch(f"{API}/users/{uid}", json={"company_vats": [f"IT{B}", B]})
+        assert r.status_code == 200 and r.json()["company_vats"] == [B]
 
 
 # Upload classification & isolation
@@ -135,7 +135,10 @@ class TestUploadIsolation:
 
     def test_user_b_upload_same_invoice(self, setup):
         s = login(UB, PWD)
-        r = upload(s, "IT05555555555_A0001.xml", A)  # spoof header ignored
+        with open(f"{SAMPLES}/IT05555555555_A0001.xml", "rb") as f:
+            rr = s.post(f"{API}/invoices/upload", files=[("files", ("x.xml", f.read()))], headers={"X-Company-Vat": A})
+        assert rr.status_code == 403  # header outside allowed list
+        r = upload(s, "IT05555555555_A0001.xml")
         assert r[0]["status"] == "ok" and r[0]["tipo"] == "attiva"
         r = upload(s, "IT05555555555_A0001.xml")
         assert r[0]["status"] == "duplicate"
@@ -152,7 +155,8 @@ class TestUploadIsolation:
     def test_isolation(self, setup):
         sa, sb = login(UA, PWD), login(UB, PWD)
         ia = sa.get(f"{API}/invoices", params={"limit": 200}).json()
-        ib = sb.get(f"{API}/invoices", params={"limit": 200}, headers={"X-Company-Vat": A}).json()
+        assert sb.get(f"{API}/invoices", headers={"X-Company-Vat": A}).status_code == 403
+        ib = sb.get(f"{API}/invoices", params={"limit": 200}).json()
         assert ia["total"] == 2
         assert all(i["company_vat"] == B for i in ib["items"])
         aid = ia["items"][0]["id"]
@@ -166,11 +170,47 @@ class TestUploadIsolation:
         assert all(a["company_vat"] == B for a in sb.get(f"{API}/anagrafiche").json())
         st = sa.get(f"{API}/stats").json()
         assert st["per_tipo"]["attiva"]["n"] == 1 and st["per_tipo"]["passiva"]["n"] == 1
-        assert sb.get(f"{API}/stats", headers={"X-Company-Vat": A}).json()["per_tipo"].get("passiva") is None
+        assert sb.get(f"{API}/stats", headers={"X-Company-Vat": A}).status_code == 403
         assert isinstance(sa.get(f"{API}/invoices/years").json(), list)
-        csv_b = sb.get(f"{API}/invoices/export", headers={"X-Company-Vat": A})
+        csv_b = sb.get(f"{API}/invoices/export")
         assert csv_b.status_code == 200 and f"fatture_{B}" in csv_b.headers["content-disposition"]
         assert "01234567890" not in csv_b.text.split("\n", 1)[1] or True
+
+    def test_multi_vat_user(self, adm, setup):
+        r = adm.post(f"{API}/users", json={"email": "test_mt_multi@example.com", "role": "user", "password": PWD, "company_vats": [A, B]})
+        assert r.status_code == 200 and r.json()["company_vats"] == [A, B]
+        s = login("test_mt_multi@example.com", PWD)
+        assert sorted(c["company_vat"] for c in s.get(f"{API}/companies").json()) == sorted([A, B])
+        ia = s.get(f"{API}/invoices", headers={"X-Company-Vat": A}).json()
+        ib = s.get(f"{API}/invoices", headers={"X-Company-Vat": B}).json()
+        assert ia["total"] == 2 and all(i["company_vat"] == A for i in ia["items"])
+        assert ib["total"] >= 1 and all(i["company_vat"] == B for i in ib["items"])
+        assert s.get(f"{API}/invoices").json()["total"] == ia["total"]  # no header -> first (A)
+        assert s.get(f"{API}/invoices", headers={"X-Company-Vat": C}).status_code == 403
+        assert s.get(f"{API}/invoices", headers={"X-Company-Vat": f"IT{B}"}).status_code == 200
+        bid = ib["items"][0]["id"]
+        assert s.get(f"{API}/invoices/{bid}", headers={"X-Company-Vat": A}).status_code == 404
+        assert s.get(f"{API}/invoices/{bid}", headers={"X-Company-Vat": B}).status_code == 200
+        an_b = s.get(f"{API}/anagrafiche", headers={"X-Company-Vat": B}).json()
+        assert s.get(f"{API}/anagrafiche/{an_b[0]['id']}", headers={"X-Company-Vat": A}).status_code == 404
+        sa = s.get(f"{API}/stats", headers={"X-Company-Vat": A}).json()
+        assert sa["per_tipo"]["attiva"]["n"] == 1
+        # upload classification against selected vat: A0001 (ced B / ces A)
+        r = upload(s, "IT05555555555_A0001.xml", A)
+        assert r[0]["status"] == "duplicate"
+        r = upload(s, "IT01234567890_00001.xml", B)
+        assert r[0]["status"] == "error"
+        assert s.post(f"{API}/users", json={"email": "test_mt_z@example.com", "password": PWD, "company_vats": [A]}).status_code == 403
+        # unlink -> loses access
+        uid = r_id = adm.get(f"{API}/users").json()
+        uid = [u for u in r_id if u["email"] == "test_mt_multi@example.com"][0]["id"]
+        assert adm.patch(f"{API}/users/{uid}", json={"company_vats": [B]}).status_code == 200
+        assert s.get(f"{API}/invoices", headers={"X-Company-Vat": A}).status_code == 403
+        assert [c["company_vat"] for c in s.get(f"{API}/companies").json()] == [B]
+        # promote to admin w/o vats ok; demote to user w/o vats -> 400
+        assert adm.patch(f"{API}/users/{uid}", json={"role": "admin", "company_vats": []}).status_code == 200
+        assert adm.patch(f"{API}/users/{uid}", json={"role": "user"}).status_code == 400
+        adm.delete(f"{API}/users/{uid}")
 
     def test_delete_blocked_with_invoices(self, adm, setup):
         uid = [u for u in adm.get(f"{API}/users").json() if u["email"] == UA][0]["id"]
