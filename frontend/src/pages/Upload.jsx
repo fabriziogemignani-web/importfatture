@@ -1,12 +1,39 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, CopyCheck, UploadCloud, XCircle } from "lucide-react";
+import { CheckCircle2, CopyCheck, FolderOpen, UploadCloud, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader, Panel, TipoBadge } from "@/components/common";
 import { api, formatApiError } from "@/lib/api";
 
 const BATCH = 10;
+const SUPPORTED = /\.(xml|p7m|zip)$/i;
+
+const readEntry = (entry) => new Promise((resolve) => {
+  if (entry.isFile) {
+    entry.file((f) => resolve([f]), () => resolve([]));
+    return;
+  }
+  const reader = entry.createReader();
+  const all = [];
+  const next = () => reader.readEntries(async (batch) => {
+    if (!batch.length) {
+      const nested = await Promise.all(all.map(readEntry));
+      resolve(nested.flat());
+      return;
+    }
+    all.push(...batch);
+    next();
+  }, () => resolve([]));
+  next();
+});
+
+const filesFromDrop = async (dt) => {
+  const entries = Array.from(dt.items || []).map((i) => i.webkitGetAsEntry?.()).filter(Boolean);
+  if (!entries.length) return Array.from(dt.files || []);
+  return (await Promise.all(entries.map(readEntry))).flat();
+};
 const ICON = {
   ok: <CheckCircle2 className="h-4 w-4 text-emerald-600" />,
   duplicate: <CopyCheck className="h-4 w-4 text-amber-600" />,
@@ -15,13 +42,20 @@ const ICON = {
 
 export default function Upload() {
   const input = useRef(null);
+  const folderInput = useRef(null);
+  const [info, setInfo] = useState("");
   const [drag, setDrag] = useState(false);
   const [progress, setProgress] = useState(null);
   const [results, setResults] = useState([]);
 
   const handle = async (fileList) => {
-    const files = Array.from(fileList || []);
-    if (!files.length) return;
+    const all = Array.from(fileList || []);
+    const files = all.filter((f) => SUPPORTED.test(f.name));
+    setInfo(`${files.length} file supportati su ${all.length} trovati`);
+    if (!files.length) {
+      toast.error("Nessun file .xml, .p7m o .zip trovato");
+      return;
+    }
     setResults([]);
     setProgress(0);
     for (let i = 0; i < files.length; i += BATCH) {
@@ -38,25 +72,35 @@ export default function Upload() {
     }
     setProgress(null);
     if (input.current) input.current.value = "";
+    if (folderInput.current) folderInput.current.value = "";
   };
 
   const count = (s) => results.filter((r) => r.status === s).length;
 
   return (
     <div>
-      <PageHeader eyebrow="Importazione massiva" title="Carica fatture" />
+      <PageHeader eyebrow="Importazione massiva" title="Carica fatture">
+        <Button variant="outline" onClick={() => folderInput.current?.click()} disabled={progress !== null} data-testid="upload-folder-button">
+          <FolderOpen className="mr-2 h-4 w-4" />Carica da cartella
+        </Button>
+        <Button onClick={() => input.current?.click()} disabled={progress !== null} data-testid="upload-files-button">
+          <UploadCloud className="mr-2 h-4 w-4" />Seleziona file
+        </Button>
+      </PageHeader>
+      <input ref={folderInput} type="file" multiple webkitdirectory="" directory="" className="hidden" onChange={(e) => handle(e.target.files)} data-testid="upload-folder-input" />
       <div
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
-        onDrop={(e) => { e.preventDefault(); setDrag(false); handle(e.dataTransfer.files); }}
+        onDrop={async (e) => { e.preventDefault(); setDrag(false); handle(await filesFromDrop(e.dataTransfer)); }}
         onClick={() => input.current?.click()}
         data-testid="upload-dropzone"
         className={`fade-up grid-bg flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-14 text-center transition-colors ${drag ? "border-slate-900 bg-slate-100" : "border-slate-300 bg-white hover:border-slate-500"}`}>
         <div className="grid h-14 w-14 place-items-center rounded-xl bg-slate-900 text-white"><UploadCloud /></div>
-        <div className="mt-4 text-lg font-semibold">Trascina qui i file o clicca per selezionarli</div>
-        <div className="mt-1 text-sm text-slate-500">Supporta <span className="font-mono">.xml</span>, <span className="font-mono">.xml.p7m</span> e archivi <span className="font-mono">.zip</span> — anche centinaia di file insieme</div>
+        <div className="mt-4 text-lg font-semibold">Trascina qui file o intere cartelle, oppure clicca per selezionarli</div>
+        <div className="mt-1 text-sm text-slate-500">Supporta <span className="font-mono">.xml</span>, <span className="font-mono">.xml.p7m</span> e archivi <span className="font-mono">.zip</span> — le sottocartelle vengono lette automaticamente</div>
         <input ref={input} type="file" multiple accept=".xml,.p7m,.zip" className="hidden" onChange={(e) => handle(e.target.files)} data-testid="upload-file-input" />
       </div>
+      {info && <div className="mt-4 text-sm text-slate-600" data-testid="upload-info">{info}</div>}
       {progress !== null && <div className="mt-5" data-testid="upload-progress"><Progress value={progress} /><div className="mt-1 text-xs text-slate-500">Elaborazione… {progress}%</div></div>}
       {results.length > 0 && (
         <Panel className="mt-6 overflow-hidden" data-testid="upload-results">

@@ -24,6 +24,9 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Export CSV (; separatore, decimali con virgola)
 - Dashboard con KPI, grafico mensile, ultime fatture
 
+## Implemented (2026-10-20)
+- Caricamento da cartella: pulsante "Carica da cartella" (webkitdirectory) + drag&drop di cartelle con lettura ricorsiva delle sottocartelle; filtro automatico .xml/.p7m/.zip
+
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
 - P1: Gestione utenti aggiuntivi da admin
