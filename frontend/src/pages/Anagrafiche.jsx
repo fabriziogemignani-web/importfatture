@@ -1,12 +1,32 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader, Panel } from "@/components/common";
 import { YearTabs } from "@/pages/Invoices";
 import { api, fmtEUR } from "@/lib/api";
+
+const SortHead = ({ field, label, sort, onSort, right }) => {
+  const active = sort.field === field;
+  const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <TableHead className={right ? "text-right" : ""}>
+      <button onClick={() => onSort(field)} data-testid={`sort-${field}`}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-slate-900 ${active ? "font-semibold text-slate-900" : ""}`}>
+        {label} <Icon className={`h-3.5 w-3.5 ${active ? "" : "opacity-40"}`} />
+      </button>
+    </TableHead>
+  );
+};
+
+const sortItems = (items, { field, dir }) => {
+  const m = dir === "asc" ? 1 : -1;
+  return [...items].sort((a, b) => field === "denominazione"
+    ? m * (a.denominazione || "").localeCompare(b.denominazione || "", "it")
+    : m * (a[field] - b[field]));
+};
 
 const Totals = ({ items, ruolo }) => (
   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" data-testid="anagrafiche-totals">
@@ -27,6 +47,10 @@ export default function Anagrafiche() {
   const [ruolo, setRuolo] = useState("cliente");
   const [q, setQ] = useState("");
   const [items, setItems] = useState([]);
+  const [sort, setSort] = useState({ field: "denominazione", dir: "asc" });
+  const onSort = (field) => setSort((s) => (s.field === field
+    ? { field, dir: s.dir === "asc" ? "desc" : "asc" }
+    : { field, dir: field === "denominazione" ? "asc" : "desc" }));
   const [years, setYears] = useState([]);
   const [anno, setAnno] = useState("tutti");
   const navigate = useNavigate();
@@ -66,11 +90,11 @@ export default function Anagrafiche() {
         ) : (
           <Table data-testid="anagrafiche-table">
             <TableHeader><TableRow className="bg-slate-50">
-              <TableHead>Ragione sociale</TableHead><TableHead>P.IVA / CF</TableHead><TableHead>Comune</TableHead>
-              <TableHead className="text-right">Documenti</TableHead><TableHead className="text-right">Importo</TableHead>
+              <SortHead field="denominazione" label="Ragione sociale" sort={sort} onSort={onSort} /><TableHead>P.IVA / CF</TableHead><TableHead>Comune</TableHead>
+              <SortHead field="n_fatture" label="Documenti" sort={sort} onSort={onSort} right /><SortHead field="totale_fatture" label="Importo" sort={sort} onSort={onSort} right />
             </TableRow></TableHeader>
             <TableBody>
-              {items.map((a) => (
+              {sortItems(items, sort).map((a) => (
                 <TableRow key={a.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/anagrafiche/${a.id}`)} data-testid={`anagrafica-row-${a.id}`}>
                   <TableCell className="font-medium">{a.denominazione}</TableCell>
                   <TableCell className="font-mono text-xs">{a.chiave}</TableCell>
