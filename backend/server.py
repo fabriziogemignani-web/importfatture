@@ -413,12 +413,29 @@ async def upsert_anagrafica(party: dict, ruolo: str, company_vat: str) -> Option
     fields = {k: v for k, v in party.items() if v}
     fields["chiave"] = chiave
     fields["updated_at"] = datetime.now(timezone.utc)
+    fields["ruolo"] = ruolo
+    fields["ruoli"] = [ruolo]
     doc = await db.anagrafiche.find_one_and_update(
-        {"company_vat": company_vat, "chiave": chiave},
-        {"$set": fields, "$addToSet": {"ruoli": ruolo}, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
+        {"company_vat": company_vat, "ruolo": ruolo, "chiave": chiave},
+        {"$set": fields, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
         upsert=True, return_document=True,
     )
     return str(doc["_id"])
+
+
+async def split_anagrafiche() -> None:
+    """One-off migration: one anagrafica per ruolo (cliente / fornitore)."""
+    async for a in db.anagrafiche.find({"ruolo": {"$exists": False}}):
+        ruoli = a.get("ruoli") or ["cliente"]
+        await db.anagrafiche.update_one({"_id": a["_id"]}, {"$set": {"ruolo": ruoli[0], "ruoli": [ruoli[0]]}})
+        for r in ruoli[1:]:
+            copy = {k: v for k, v in a.items() if k != "_id"}
+            copy.update(ruolo=r, ruoli=[r])
+            new_id = (await db.anagrafiche.insert_one(copy)).inserted_id
+            await db.invoices.update_many(
+                {"company_vat": a.get("company_vat"), "controparte_id": str(a["_id"]),
+                 "tipo": "attiva" if r == "cliente" else "passiva"},
+                {"$set": {"controparte_id": str(new_id)}})
 
 
 async def store_invoice(inv: dict, raw_xml: str, filename: str, company_vat: str) -> dict:
@@ -658,13 +675,15 @@ async def startup():
     await db.login_attempts.create_index("identifier")
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.password_reset_tokens.create_index("token_hash")
-    for coll, idx in ((db.invoices, "dedup_key_1"), (db.anagrafiche, "chiave_1"), (db.invoices, "tipo_1_anno_-1_numero_key_1")):
+    for coll, idx in ((db.invoices, "dedup_key_1"), (db.anagrafiche, "chiave_1"), (db.anagrafiche, "company_vat_1_chiave_1"),
+                      (db.invoices, "tipo_1_anno_-1_numero_key_1")):
         if idx in await coll.index_information():
             await coll.drop_index(idx)
     await db.invoices.create_index([("company_vat", 1), ("dedup_key", 1)], unique=True)
     await db.invoices.create_index([("company_vat", 1), ("tipo", 1), ("anno", -1), ("numero_key", 1)])
     await db.invoices.create_index([("company_vat", 1), ("controparte_id", 1)])
-    await db.anagrafiche.create_index([("company_vat", 1), ("chiave", 1)], unique=True)
+    await split_anagrafiche()
+    await db.anagrafiche.create_index([("company_vat", 1), ("ruolo", 1), ("chiave", 1)], unique=True)
     async for u in db.users.find({"company_vat": {"$exists": True}}):
         vats = u.get("company_vats") or ([u["company_vat"]] if u.get("company_vat") else [])
         await db.users.update_one({"_id": u["_id"]}, {"$set": {"company_vats": vats}, "$unset": {"company_vat": ""}})

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/common";
@@ -10,21 +10,9 @@ const Field = ({ label, value }) => value ? (
   <div><dt className="font-mono text-[11px] uppercase tracking-wider text-slate-500">{label}</dt><dd className="mt-0.5 text-sm">{value}</dd></div>
 ) : null;
 
-const RoleSwitch = ({ ruoli, ruolo, onChange }) => (
-  <div className="flex gap-2">
-    {ruoli.map((r) => (
-      <button key={r} onClick={() => onChange(r)} data-testid={`anagrafica-role-${r}`}
-        className={`rounded-md border px-2 py-0.5 text-xs capitalize transition-colors ${r === ruolo ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-400"}`}>
-        {r}
-      </button>
-    ))}
-  </div>
-);
-
 export default function AnagraficaDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
   const [a, setA] = useState(null);
   const [invoices, setInvoices] = useState([]);
 
@@ -32,7 +20,7 @@ export default function AnagraficaDetail() {
     api.get(`/anagrafiche/${id}`).then((r) => setA(r.data));
   }, [id]);
 
-  const ruolo = a && (a.ruoli.includes(params.get("ruolo")) ? params.get("ruolo") : a.ruoli[0]);
+  const ruolo = a && (a.ruolo || a.ruoli[0]);
   const tipo = ruolo === "fornitore" ? "passiva" : "attiva";
 
   useEffect(() => {
@@ -51,7 +39,7 @@ export default function AnagraficaDetail() {
       <button onClick={() => navigate(-1)} className="mb-4 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900" data-testid="anagrafica-back-button"><ArrowLeft size={16} /> Indietro</button>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <RoleSwitch ruoli={a.ruoli} ruolo={ruolo} onChange={(r) => setParams({ ruolo: r }, { replace: true })} />
+          <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs capitalize" data-testid="anagrafica-role">{ruolo}</span>
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl" data-testid="anagrafica-name">{a.denominazione}</h1>
         </div>
         <Button variant="outline" onClick={() => downloadFile("/invoices/export", { anagrafica_id: id, tipo, order: "desc" }, "fatture.csv")} data-testid="anagrafica-export-csv"><Download className="mr-2 h-4 w-4" />Esporta CSV</Button>
