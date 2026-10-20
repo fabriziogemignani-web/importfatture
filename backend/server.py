@@ -23,7 +23,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 from pymongo import ASCENDING, DESCENDING
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from fattura_parser import extract_xml_files, parse_fattura
 from email_service import reset_email_html, send_email
@@ -709,11 +709,11 @@ async def startup():
     await dedup_anagrafiche()
     try:
         await db.anagrafiche.create_index([("company_vat", 1), ("ruolo", 1), ("chiave", 1)], unique=True)
-    except DuplicateKeyError:
+    except OperationFailure:
         await dedup_anagrafiche()
         try:
             await db.anagrafiche.create_index([("company_vat", 1), ("ruolo", 1), ("chiave", 1)], unique=True)
-        except DuplicateKeyError as e:
+        except OperationFailure as e:
             logger.error(f"Unique index on anagrafiche not built, continuing startup: {e}")
     async for u in db.users.find({"company_vat": {"$exists": True}}):
         vats = u.get("company_vats") or ([u["company_vat"]] if u.get("company_vat") else [])

@@ -1,0 +1,20 @@
+{
+  "summary": "Backend-only test of the startup safeguard for the anagrafiche (company_vat, ruolo, chiave) unique index, run on the LOCAL test_database only. A) Reproduced the prod data (indexes dropped, company 01192570453, 2 identical cliente docs for 01428910457, each with 1 attiva invoice), then restarted: log shows 'Merged 1 duplicate anagrafiche' and 'Application startup complete', localhost:8001/api/auth/me returns 401, 1 record is left, both invoices point to the kept id, and the unique index exists. B) With the unique index already in place, seeded a legacy doc with no ruolo (ruoli [cliente, fornitore], same chiave) plus 1 attiva and 1 passiva invoice, then restarted: startup completes, the index is dropped and rebuilt, the result is 1 cliente + 1 fornitore with consistent ruoli, attiva invoices point to the cliente and the passiva invoice to the fornitore. C) A second restart is idempotent: the before/after snapshot diff is empty and nothing crashes. D) Fallback path tested in-process with create_index patched to raise DuplicateKeyError every time: startup() makes exactly 2 attempts, logs 'Unique index on anagrafiche not built' and completes. Also confirmed that a real duplicate unique-index build raises pymongo DuplicateKeyError (code 11000), so the except clause catches the actual prod error. E) Regression on the public URL: admin login returns 200 with httpOnly Secure cookies, /me role is admin, the Clienti list for 01192570453 shows one row for 01428910457 (n_fatture 3, totale 350.5), the Fornitori list shows one row (1 invoice, 300.0). Admin hash is $2b$. All TEST data was deleted afterwards (companies/anagrafiche/invoices = 0, admin user only).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "startup()", "issue": "The safeguard catches only DuplicateKeyError. Any other OperationFailure from create_index (for example IndexOptionsConflict/IndexKeySpecsConflict if an index with the same keys but different options exists in prod) would still crash startup. Consider catching OperationFailure in the outer except as well."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/startup_index_safeguard_repro.py", "/app/backend/tests/test_startup_index_safeguard.py", "/app/test_reports/pytest/iteration_9.xml"],
+  "action_items": ["Optional: widen the outer except in startup() to OperationFailure (DuplicateKeyError is a subclass) so no index-build error can crash startup", "Redeploy to production: the failing prod logs came from an older build without dedup"],
+  "critical_code_review_comments": ["split_anagrafiche drops the unique index only when legacy docs exist, so in steady state there is no index churn (verified idempotent)", "dedup_anagrafiche keeps the smallest ObjectId and repoints invoices filtered by company_vat, so it is tenant-safe", "@app.on_event is deprecated (FastAPI warns); migrating to lifespan is optional"],
+  "updated_files": ["/app/backend/tests/startup_index_safeguard_repro.py", "/app/backend/tests/test_startup_index_safeguard.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped)"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / FattureXML2026 (from /app/memory/test_credentials.md, unchanged)",
+  "seed_data_creation": "Temporary TEST data for company 01192570453 created by startup_index_safeguard_repro.py seedA/seedB and removed with 'cleanup'. Local DB is back to admin only.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Repro flow: python /app/backend/tests/startup_index_safeguard_repro.py seedA -> restart backend -> verifyA -> seedB -> restart -> verifyB -> snapshot/restart/snapshot to check idempotency -> run pytest tests/test_startup_index_safeguard.py while data is present (the regression tests depend on the seeded data) -> cleanup. The pytest fallback test calls server.startup() in-process with create_index monkeypatched."
+}
