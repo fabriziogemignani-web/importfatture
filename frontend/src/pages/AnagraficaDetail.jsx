@@ -73,7 +73,7 @@ export default function AnagraficaDetail() {
         <Panel className="p-5" data-testid="anagrafica-totals">
           <div className="font-mono text-[11px] uppercase tracking-wider text-slate-500">{isCliente ? "Fatture attive (vendite)" : "Fatture passive (acquisti)"}</div>
           <div className={`mt-1 text-2xl font-bold tabular-nums ${isCliente ? "text-emerald-700" : "text-indigo-700"}`} data-testid="anagrafica-total-amount">{fmtEUR(tot.totale)}</div>
-          <div className="text-xs text-slate-500" data-testid="anagrafica-total-docs">{tot.n} fatture</div>
+          <div className="text-xs text-slate-500" data-testid="anagrafica-total-docs">{tot.n} {tot.n === 1 ? "fattura" : "fatture"}</div>
         </Panel>
       </div>
       <Panel className="mt-6 overflow-hidden">

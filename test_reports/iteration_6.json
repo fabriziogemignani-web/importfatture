@@ -1,0 +1,21 @@
+{
+  "summary": "Frontend test of the bug fix for an anagrafica that is both cliente and fornitore (Playwright, desktop and a mobile check). Seed: company 01234567890 with 2 attive invoices to 05555555555 (TEST-A1 and TEST-A2, 1220 € each) and 1 passiva from 05555555555 (FT/2, 610 €). This gives one anagrafica with ruoli [cliente, fornitore]. Results: (1) Anagrafiche > Fornitori: the row shows 1 doc / 610,00 €. Clicking it opens ?ruolo=fornitore with total 610,00 €, '1 fatture', 1 row (FT/2) and the heading 'Storico fatture passive'. (2) Anagrafiche > Clienti: the row shows 2 docs / 2440,00 €. Clicking it opens ?ruolo=cliente with 2440,00 €, 2 rows and the heading 'Storico fatture attive'. (3) The anagrafica-role-cliente / anagrafica-role-fornitore buttons switch the URL, the list, the totals and the heading correctly in both directions. (4) The CSV export holds only the selected tipo: the fornitore export has only the passiva row, the cliente export only the 2 attiva rows. (5) From an invoice detail page, a passiva shows the link only on the cedente and opens ?ruolo=fornitore, and an attiva shows it only on the cessionario and opens ?ruolo=cliente. The flow passive list > invoice > link also works. (6) The per-row totals in the Anagrafiche list stay separated by role. No attive/passive totals are mixed or netted. The bug is fixed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [{"screen": "AnagraficaDetail totals", "issues": ["Grammar: shows '1 fatture'. It should read '1 fattura' when n == 1."]}]
+  },
+  "test_report_links": ["/app/backend/tests/seed_dual_role.py"],
+  "action_items": ["Optional: pluralize 'fattura/fatture' in anagrafica-total-docs", "Optional: when ?ruolo is invalid (e.g. ?ruolo=xyz) the page silently falls back to ruoli[0] but the URL keeps the invalid value; consider normalizing the URL with replace"],
+  "critical_code_review_comments": [
+    "AnagraficaDetail fetches the invoices with limit 200 and no pagination. A counterparty with more than 200 invoices of one tipo would show a truncated list, while the totals box (from the riepilogo aggregate) would still be complete.",
+    "The anagrafica fetch and the invoices fetch have no error handling or catch, so a 404 or invalid id leaves the page on 'Caricamento…' forever."
+  ],
+  "updated_files": ["/app/backend/tests/seed_dual_role.py"],
+  "success_rate": {"backend": "skipped (frontend only)", "frontend": "100%"},
+  "seed_data_creation": "Created with seed_dual_role.py seed and removed with seed_dual_role.py cleanup. The DB now has 0 companies, 0 invoices, 0 anagrafiche and 1 user (admin). Admin password unchanged.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use `python backend/tests/seed_dual_role.py seed|cleanup` (needs ADMIN_EMAIL, ADMIN_PASSWORD and REACT_APP_BACKEND_URL env vars) to rebuild a dual-role anagrafica. The invoice detail route is /fatture/:id. The counterpart link is the <a> inside invoice-cedente (passiva) or invoice-cessionario (attiva)."
+}
