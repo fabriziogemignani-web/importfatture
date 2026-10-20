@@ -426,6 +426,10 @@ async def upsert_anagrafica(party: dict, ruolo: str, company_vat: str) -> Option
 
 async def split_anagrafiche() -> None:
     """One-off migration: one anagrafica per ruolo (cliente / fornitore)."""
+    if not await db.anagrafiche.count_documents({"ruolo": {"$exists": False}}, limit=1):
+        return
+    if "company_vat_1_ruolo_1_chiave_1" in await db.anagrafiche.index_information():
+        await db.anagrafiche.drop_index("company_vat_1_ruolo_1_chiave_1")
     async for a in db.anagrafiche.find({"ruolo": {"$exists": False}}):
         ruoli = a.get("ruoli") or ["cliente"]
         await db.anagrafiche.update_one({"_id": a["_id"]}, {"$set": {"ruolo": ruoli[0], "ruoli": [ruoli[0]]}})

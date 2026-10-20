@@ -1,0 +1,27 @@
+{
+  "summary": "Tested the dedup_anagrafiche startup fix against a local copy of the prod data. Seeded the local test_database with all anagrafiche indexes dropped: company 01192570453 with 3 identical 'cliente' records for chiave 01428910457 (one invoice each), the same chiave under a 2nd company (must stay untouched), an old-format record with no ruolo and ruoli [cliente, fornitore] (one attiva and one passiva invoice), and a mixed case (an existing cliente record plus an old-format [fornitore, cliente] record for the same chiave). Restart 1: startup completed (/api/auth/me returns 401). Logs show 'Merged 2' and 'Merged 1'. The 3 duplicates became 1 (lowest _id kept) and all invoices point to it. The other company was untouched. The old-format records were split into cliente + fornitore, with invoices reassigned by tipo, then deduped. No orphan invoices. Unique index company_vat_1_ruolo_1_chiave_1 exists. Restart 2: same DB snapshot, no merge logs, no crash (idempotent). API: /anagrafiche?ruolo=cliente returns one row for 01428910457 (n_fatture 3, total 160.50); detail riepilogo attiva n=3; invoices filtered by anagrafica_id returns D1-D3. UI (admin, company selector set to 01192570453, Anagrafiche > Clienti): exactly one row for 01428910457 showing 3 docs and 160,50 EUR; the detail page shows '3 fatture 160,50 EUR' and lists all 3 invoices. Regression: the existing suites (split_anagrafiche incl. upload/upsert, parser, multitenant, users_auth) pass 60/60 with 2 skipped when run serially (-n0). Found one edge case where startup can still crash (see backend_issues).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "startup / split_anagrafiche()", "issue": "Startup can still crash. If the unique index company_vat_1_ruolo_1_chiave_1 already exists and an old-format record (no 'ruolo') shows up with the same (company_vat, chiave) as an existing record, split_anagrafiche's update_one/insert_one raises DuplicateKeyError and the app exits ('Application startup failed', 502). Reproduced locally. This is unlikely now that every write sets ruolo. It could happen during a rolling deploy where old pods are still writing, or after a data restore/import. dedup runs after split, so it never gets a chance to fix this case."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/dedup_repro.py", "/app/backend/tests/test_split_anagrafiche.py", "/app/test_reports/pytest/pytest_results_iter8.xml"],
+  "action_items": [
+    "Optional hardening: make split_anagrafiche safe when the unique index already exists. Either catch DuplicateKeyError on update_one/insert_one and re-point invoices to the existing (company_vat, ruolo, chiave) record, then delete the old-format record; or drop the unique index before split/dedup and rebuild it afterwards.",
+    "Make test_multitenant.py cleanup() delete only TEST companies. Right now it deletes the invoices of EVERY company (and then the companies) returned by /api/companies. That is destructive if it is ever run against real data."
+  ],
+  "critical_code_review_comments": [
+    "dedup_anagrafiche keeps the lowest _id but does not merge fields from the duplicates. That is fine for identical duplicates; for non-identical ones the next upload refreshes the fields anyway.",
+    "Within a company, controparte_id is re-pointed only for invoices whose company_vat matches the group. This is correct and cross-company data stays isolated (verified).",
+    "The pytest suites share module/class fixtures and break under xdist parallel runs (-n auto is the default here): 16 failures/errors in parallel vs 0 serially. Run them with -n0 or make them safe for parallel runs."
+  ],
+  "updated_files": ["/app/backend/tests/dedup_repro.py"],
+  "success_rate": {"backend": "100% for the requested scenarios (1 extra edge case fails)", "frontend": "100%"},
+  "seed_data_creation": "dedup_repro.py seed/verify/cleanup (companies 01192570453, 09999999990). All of it was cleaned up; the DB now holds only the admin user, and the unique index is present.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use 'python /app/backend/tests/dedup_repro.py seed' (it drops the anagrafiche indexes), then 'sudo supervisorctl restart backend', then 'python dedup_repro.py verify', then 'python dedup_repro.py cleanup'. Run the pytest suites with -n0. test_multitenant cleanup wipes all companies, so seed after running it.",
+  "rca of the issue": "Prod crash: duplicate (company_vat, ruolo, chiave) records were written before the unique index existed, so create_index failed. The fix collapses them first. Remaining risk: split_anagrafiche runs while the unique index may already exist, and it is not idempotent against collisions."
+}
