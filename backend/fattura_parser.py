@@ -53,11 +53,17 @@ def _zip_members(zf: zipfile.ZipFile) -> Iterator[zipfile.ZipInfo]:
             yield info
 
 
-def _read_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> Optional[bytes]:
+def _read_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, limit: int) -> tuple[Optional[bytes], Optional[str]]:
+    out = bytearray()
     try:
-        return zf.read(info)
+        with zf.open(info) as fh:
+            while chunk := fh.read(65536):
+                out += chunk
+                if len(out) > limit:
+                    return None, "File troppo grande (max 20 MB)"
     except (zipfile.BadZipFile, RuntimeError, NotImplementedError, ValueError, OSError, EOFError):
-        return None
+        return None, "File dell'archivio illeggibile, corrotto o protetto da password"
+    return bytes(out), None
 
 
 def extract_xml_files(filename: str, data: bytes, depth: int = 0, budget: Optional[_Budget] = None) -> Iterator[tuple[str, Optional[bytes], Optional[str]]]:
@@ -74,17 +80,18 @@ def extract_xml_files(filename: str, data: bytes, depth: int = 0, budget: Option
             return
         for info in _zip_members(zf):
             budget.members += 1
-            budget.total += info.file_size
-            if budget.members > MAX_ZIP_MEMBERS or budget.total > MAX_ZIP_TOTAL_BYTES:
+            remaining = MAX_ZIP_TOTAL_BYTES - budget.total
+            if budget.members > MAX_ZIP_MEMBERS or info.file_size > remaining:
                 yield filename, None, "Archivio troppo grande: dividilo in più parti"
                 return
             if info.file_size > MAX_MEMBER_BYTES:
                 yield f"{filename}/{info.filename}", None, "File troppo grande (max 20 MB)"
                 continue
-            member = _read_member(zf, info)
-            if member is None:
-                yield f"{filename}/{info.filename}", None, "File dell'archivio illeggibile, corrotto o protetto da password"
+            member, err = _read_member(zf, info, min(MAX_MEMBER_BYTES, remaining))
+            if err:
+                yield f"{filename}/{info.filename}", None, err
                 continue
+            budget.total += len(member)
             yield from extract_xml_files(f"{filename}/{info.filename}", member, depth + 1, budget)
         return
     if low.endswith(".p7m"):
