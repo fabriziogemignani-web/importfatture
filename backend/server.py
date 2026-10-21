@@ -138,8 +138,8 @@ async def _set_password(oid: ObjectId, password: str):
 def set_auth_cookies(response: Response, user_id: str, email: str):
     access = _token({"sub": user_id, "email": email, "type": "access"}, timedelta(minutes=15))
     refresh = _token({"sub": user_id, "type": "refresh"}, timedelta(days=7))
-    response.set_cookie("access_token", access, httponly=True, secure=True, samesite="none", max_age=900, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=True, samesite="none", max_age=604800, path="/")
+    response.set_cookie("access_token", access, httponly=True, secure=True, samesite="lax", max_age=900, path="/")
+    response.set_cookie("refresh_token", refresh, httponly=True, secure=True, samesite="lax", max_age=604800, path="/")
 
 
 def _public_user(u: dict) -> dict:
@@ -199,8 +199,8 @@ async def login(body: LoginIn, request: Request, response: Response):
 
 @api.post("/auth/logout")
 async def logout(response: Response):
-    response.delete_cookie("access_token", path="/", secure=True, samesite="none")
-    response.delete_cookie("refresh_token", path="/", secure=True, samesite="none")
+    response.delete_cookie("access_token", path="/", secure=True, samesite="lax")
+    response.delete_cookie("refresh_token", path="/", secure=True, samesite="lax")
     return {"ok": True}
 
 
@@ -491,11 +491,20 @@ async def store_invoice(inv: dict, raw_xml: str, filename: str, company_vat: str
         return {"status": "ok", "message": f"Fattura {tipo} importata", "numero": inv["numero"], "tipo": tipo, "id": str(res.inserted_id)}
 
 
+MAX_UPLOAD_FILES = 50
+MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+
+
 @api.post("/invoices/upload")
 async def upload_invoices(files: List[UploadFile] = File(...), company_vat=Depends(get_tenant)):
+    if len(files) > MAX_UPLOAD_FILES:
+        raise HTTPException(400, f"Massimo {MAX_UPLOAD_FILES} file per richiesta")
     results = []
     for f in files:
-        data = await f.read()
+        data = await f.read(MAX_UPLOAD_BYTES + 1)
+        if len(data) > MAX_UPLOAD_BYTES:
+            results.append({"filename": f.filename, "status": "error", "message": "File troppo grande (max 100 MB)"})
+            continue
         for name, xml_bytes, err in extract_xml_files(f.filename or "file", data):
             if err:
                 results.append({"filename": name, "status": "error", "message": err})
@@ -572,6 +581,11 @@ def _fmt(n):
     return f"{n:.2f}".replace(".", ",")
 
 
+def _safe(v) -> str:
+    s = str(v or "")
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
 @api.get("/invoices/export")
 async def export_csv(tipo: Optional[str] = None, anno: Optional[int] = None, q: Optional[str] = None,
                      anagrafica_id: Optional[str] = None, order: str = "asc", tipo_documento: Optional[str] = None,
@@ -582,9 +596,9 @@ async def export_csv(tipo: Optional[str] = None, anno: Optional[int] = None, q: 
     w = csv.writer(buf, delimiter=";")
     w.writerow(["Tipo", "Anno", "Numero", "Data", "Tipo documento", "Cliente/Fornitore", "P.IVA/CF", "Imponibile", "IVA", "Totale", "Divisa", "File"])
     async for d in db.invoices.find(query, LIST_PROJECTION).sort(sort_spec(order)):
-        w.writerow([d["tipo"], d["anno"], d["numero"], d["data"], d.get("tipo_documento", ""), d.get("controparte_nome", ""),
-                    d.get("controparte_piva", ""), _fmt(d.get("imponibile", 0)), _fmt(d.get("imposta", 0)), _fmt(d.get("totale", 0)),
-                    d.get("divisa", ""), d.get("filename", "")])
+        w.writerow([d["tipo"], d["anno"], _safe(d["numero"]), d["data"], _safe(d.get("tipo_documento")), _safe(d.get("controparte_nome")),
+                    _safe(d.get("controparte_piva")), _fmt(d.get("imponibile", 0)), _fmt(d.get("imposta", 0)), _fmt(d.get("totale", 0)),
+                    _safe(d.get("divisa")), _safe(d.get("filename"))])
     name = f"fatture_{vat}_{tipo or 'tutte'}_{anno or 'tutti-anni'}.csv"
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",
                              headers={"Content-Disposition": f'attachment; filename="{name}"'})

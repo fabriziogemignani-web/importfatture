@@ -8,6 +8,17 @@ from typing import Iterator, Optional
 
 Element = ET.Element
 
+MAX_ZIP_DEPTH = 3
+MAX_ZIP_MEMBERS = 5000
+MAX_MEMBER_BYTES = 20 * 1024 * 1024
+MAX_ZIP_TOTAL_BYTES = 300 * 1024 * 1024
+
+
+class _Budget:
+    def __init__(self) -> None:
+        self.members = 0
+        self.total = 0
+
 
 def _decode_p7m(data: bytes) -> bytes:
     candidates = [data]
@@ -42,16 +53,28 @@ def _zip_members(zf: zipfile.ZipFile) -> Iterator[zipfile.ZipInfo]:
             yield info
 
 
-def extract_xml_files(filename: str, data: bytes) -> Iterator[tuple[str, Optional[bytes], Optional[str]]]:
+def extract_xml_files(filename: str, data: bytes, depth: int = 0, budget: Optional[_Budget] = None) -> Iterator[tuple[str, Optional[bytes], Optional[str]]]:
     """Yields (name, xml_bytes or None, error or None)."""
+    budget = budget or _Budget()
     low = filename.lower()
     if low.endswith(".zip"):
+        if depth >= MAX_ZIP_DEPTH:
+            yield filename, None, "Troppi archivi ZIP annidati"
+            return
         zf = _open_zip(data)
         if zf is None:
             yield filename, None, "Archivio ZIP non valido"
             return
         for info in _zip_members(zf):
-            yield from extract_xml_files(f"{filename}/{info.filename}", zf.read(info))
+            budget.members += 1
+            budget.total += info.file_size
+            if budget.members > MAX_ZIP_MEMBERS or budget.total > MAX_ZIP_TOTAL_BYTES:
+                yield filename, None, "Archivio troppo grande: dividilo in più parti"
+                return
+            if info.file_size > MAX_MEMBER_BYTES:
+                yield f"{filename}/{info.filename}", None, "File troppo grande (max 20 MB)"
+                continue
+            yield from extract_xml_files(f"{filename}/{info.filename}", zf.read(info), depth + 1, budget)
         return
     if low.endswith(".p7m"):
         try:
@@ -111,6 +134,8 @@ def natural_key(numero: str) -> str:
 
 def _parse_root(xml_bytes: bytes) -> Element:
     root: Optional[Element] = None
+    if re.search(rb"<!(DOCTYPE|ENTITY)", xml_bytes[:4096], re.I) or b"<!ENTITY" in xml_bytes:
+        raise ValueError("XML non valido: dichiarazioni DTD/ENTITY non ammesse")
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as e:

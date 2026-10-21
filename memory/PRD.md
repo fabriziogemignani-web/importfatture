@@ -45,6 +45,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Code review 2: useMemo sui context, costanti grafico, try/else in store_invoice, root inizializzato nel parser
 - Elenco fatture: colonna "Tipo doc." con badge colorato (TD01 neutro, TD04 rosso, altri tipi colori diversi, tooltip con descrizione)
 - Filtro tipo documento in Fatture Attive/Passive (select con tipi presenti e conteggi, anche nell'export CSV); endpoint /api/invoices/doc-types
+- Security audit fixes: limiti upload (50 file/richiesta, 100MB/file, ZIP max 3 livelli, 5000 file, 20MB/file, 300MB totali), DTD/ENTITY rifiutati, CSV anti formula-injection, cookie SameSite=Lax (anti-CSRF)
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
