@@ -1,0 +1,28 @@
+{
+  "summary": "Tested the TipoDocumento filter end to end. Backend: 10/10 pytest pass. /api/invoices/doc-types is scoped per tipo, anno and P.IVA. tipo_documento works on list and export and is case-insensitive (td04). Frontend: the filter options and counts are correct for 2025 (TD01 (2), TD04 (1), TD05 (1)) and 2026 (TD04 (1)). Choosing TD04 shows only red TD04 badges and updates the count and Totale. A selected type missing from the new year gives the empty state with the option shown as (0). The filter works with search and sort. The CSV export with TD04 has only the TD04 row. Passive has only the 'Tutti' option, and switching between Attive and Passive resets the filter to Tutti. Paging resets to 1 / 2. One race condition found in the paging reset (an existing pattern that the new filter also triggers).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Invoices.jsx page-reset race", "issue": "If you change a filter (doc type, year, search or order) while on page 2 or later, two GET /api/invoices requests are sent: first with the new filter and the old page=2, then with page=1 (setPage(1) runs in a separate effect after the key changes). The data effect does not ignore stale responses, so whichever response arrives last is shown. Reproduced once (mobile run): the indicator showed '1 / 2' but the rows were from page 2 (146..154, 9 rows). Three desktop retries showed the correct page 1, so it is intermittent. The double request was seen every time.", "selector": "[data-testid=page-indicator]", "priority": "MEDIUM"},
+      {"component": "doc-type-filter zero option", "issue": "The '(0)' option for a selected type missing in the current year has no data-testid (the other options have doc-type-option-<CODE>)", "selector": "[data-testid=doc-type-filter]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [{"screen": "Fatture Attive/Passive", "issues": ["Count says '1 fatture' (should be '1 fattura' for one item, existing issue)"]}]
+  },
+  "test_report_links": ["/app/backend/tests/test_doc_type_filter_iter13.py", "/app/backend/tests/seed_paging_iter13.py", "/app/test_reports/pytest/pytest_iter13.xml"],
+  "action_items": [
+    "Fix the page-reset race in Invoices.jsx: in the data useEffect, add a cancelled flag (or AbortController) in the cleanup so stale responses are ignored. Also call setPage(1) inside the handlers that change filters (or derive the page from a key that includes the filters), so a request with the stale page is never sent.",
+    "Add data-testid to the '(0)' fallback SelectItem (e.g. doc-type-option-<CODE>)"
+  ],
+  "critical_code_review_comments": [
+    "invoice_doc_types uses .to_list(100), which is fine because there are few TD codes",
+    "The doc-types useEffect has no .catch, so a failed request gives an unhandled promise rejection; the same applies to the /invoices/years fetch"
+  ],
+  "updated_files": ["/app/backend/tests/test_doc_type_filter_iter13.py", "/app/backend/tests/seed_paging_iter13.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / FattureXML2026 (unchanged)",
+  "seed_data_creation": "TEST_A srl (01234567890), TEST_B srl (05555555555), 5 doc-type invoices and 55 paging invoices. All deleted at the end (invoices 0, anagrafiche 0, companies 0, only the admin user left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run 'KEEP_SEED=1 pytest tests/test_doc_type_filter_iter13.py' to seed without cleanup, then 'python tests/seed_paging_iter13.py' for more than 50 rows, and 'python tests/seed_paging_iter13.py cleanup' to clean up. The seed only changes ImportoTotaleDocumento, so Imponibile stays 1000 (expected, not a bug)."
+}

@@ -29,7 +29,7 @@ export default function Invoices({ tipo }) {
   const [order, setOrder] = useState("asc");
   const [docType, setDocType] = useState("tutti");
   const [docTypes, setDocTypes] = useState([]);
-  const [page, setPage] = useState(1);
+  const [pageState, setPageState] = useState({ key: "", page: 1 });
   const [data, setData] = useState({ items: [], total: 0, somma_totale: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -49,17 +49,21 @@ export default function Invoices({ tipo }) {
   useEffect(() => {
     api.get("/invoices/doc-types", { params: { tipo, ...(anno !== "tutti" && { anno }) } }).then((r) => setDocTypes(r.data));
   }, [tipo, anno]);
-  useEffect(() => {
-    setPage(1);
-  }, [anno, debounced, order, tipo, docType]);
 
   const params = { tipo, order, ...(anno !== "tutti" && { anno }), ...(debounced && { q: debounced }), ...(docType !== "tutti" && { tipo_documento: docType }) };
+  const filterKey = JSON.stringify(params);
+  const page = pageState.key === filterKey ? pageState.page : 1;
+  const setPage = (p) => setPageState({ key: filterKey, page: p });
   const key = JSON.stringify({ ...params, page });
   useEffect(() => {
+    let alive = true;
     setLoading(true);
     api.get("/invoices", { params: { ...JSON.parse(key), limit: LIMIT } })
-      .then((r) => setData(r.data))
-      .finally(() => setLoading(false));
+      .then((r) => alive && setData(r.data))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
   }, [key]);
 
   const exportCsv = () => downloadFile("/invoices/export", params, "fatture.csv").catch((e) => toast.error(formatApiError(e)));
@@ -83,7 +87,7 @@ export default function Invoices({ tipo }) {
             <SelectContent>
               <SelectItem value="tutti" data-testid="doc-type-option-tutti">Tutti i tipi documento</SelectItem>
               {docType !== "tutti" && !docTypes.some((d) => d.code === docType) && (
-                <SelectItem value={docType}>{docType} · {docTypeLabel(docType)} (0)</SelectItem>
+                <SelectItem value={docType} data-testid={`doc-type-option-${docType}`}>{docType} · {docTypeLabel(docType)} (0)</SelectItem>
               )}
               {docTypes.map((d) => (
                 <SelectItem key={d.code} value={d.code} data-testid={`doc-type-option-${d.code}`}>{d.code} · {docTypeLabel(d.code)} ({d.n})</SelectItem>
@@ -96,7 +100,7 @@ export default function Invoices({ tipo }) {
           </Button>
         </div>
         <div className="flex items-center justify-between bg-slate-50/60 px-4 py-2 text-xs text-slate-500">
-          <span data-testid="invoices-count">{data.total} fatture</span>
+          <span data-testid="invoices-count">{data.total} {data.total === 1 ? "fattura" : "fatture"}</span>
           <span data-testid="invoices-sum">Totale: <b className="text-slate-900">{fmtEUR(data.somma_totale)}</b></span>
         </div>
         <InvoiceTable items={data.items} loading={loading} />
