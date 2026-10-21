@@ -1,0 +1,18 @@
+{
+  "summary": "Frontend-only test of the 'Tipo doc.' column plus a regression check after the context useMemo refactor, run on the preview URL. Setup: companies 01234567890 and 05555555555 created via the API. Through the UI upload page I uploaded 5 XML variants of the sample (TD01 n.10, TD04 n.11, TD05 n.12, TD24 n.13, TD99 n.14). Result: 5 importate, 0 duplicate, 0 errori. Fatture Attive has a 'TIPO DOC.' column (between Cliente/Fornitore and Imponibile) with one badge per row. Computed styles: TD01 slate rgb(51,65,85) on slate-50, title 'Fattura'. TD04 red rgb(185,28,28) on red-50 with a red-300 border, title 'Nota di credito'. TD05 amber, title 'Nota di debito'. TD24 teal, title 'Fattura differita (art.21 c.4 lett.a)'. TD99 indigo, title 'Altro documento'. The same 5 badges, with the same colors and titles, appear in the anagrafica detail 'Storico fatture attive' table. Regression: admin login works. The sidebar company-select switch reloads Fatture Attive (5 -> 1 fatture, only TD01 for the second company) and the Dashboard KPIs (6100 -> 610 EUR). The dashboard chart shows month labels Gen..Dic, and the tooltip on hover reads 'Mar | Attive : 6100,00 EUR | Passive : 0,00 EUR'. Passive shows its empty state. Logout redirects to /login, and protected routes redirect to /login once logged out. Role gating for a TEST 'user' role: no company-select (single P.IVA card), no nav-utenti, /utenti redirects to /, Impostazioni is read-only, and the user sees the badges for their company. The only 4xx were the expected 401s on /auth/me and /auth/refresh when logged out; there were no page errors. Code review of the useMemo/useCallback contexts, store_invoice try/except/else and the _parse_root init found no problems. All TEST data cleaned up; the DB holds only the admin user.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Optional/business: a TD04 (nota di credito) with a positive ImportoTotaleDocumento is added positively to the list total (Totale 6100 includes the TD04 1220), the dashboard KPI and the anagrafica totals. Consider subtracting TD04 amounts (or showing them negative) if the user expects net totals. This predates the current change and is not a regression.",
+    "_parse_root: the 'root: Optional[Element] = None' initialization is harmless but redundant, because the except branch raises."
+  ],
+  "updated_files": ["/app/test_reports/iteration_12.json"],
+  "success_rate": {"backend": "skipped (frontend only)", "frontend": "100%"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / FattureXML2026 (unchanged). A temporary TEST user test_td_user@example.com was created and then deleted.",
+  "seed_data_creation": "Companies 01234567890 and 05555555555, 6 invoices, 2 anagrafiche and 1 TEST user were created and then all deleted. The DB holds only the admin user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "TD variants are generated with sed from /app/tests/samples/IT01234567890_00001.xml (replace <TipoDocumento>TD01 and <Numero>10). Badge selector: [data-testid=doc-type-badge-<CODE>], with the title attribute as the tooltip. Recharts tooltip: hover path.recharts-rectangle inside [data-testid=dashboard-chart]."
+}
