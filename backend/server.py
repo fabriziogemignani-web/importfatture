@@ -18,7 +18,7 @@ import bcrypt
 import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -32,6 +32,15 @@ client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = client[os.environ["DB_NAME"]]
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def csrf_guard(request: Request, call_next):
+    # Cross-site forms cannot set custom headers; unsafe /api calls must carry X-Requested-With.
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/") \
+            and request.headers.get("x-requested-with") != "XMLHttpRequest":
+        return JSONResponse({"detail": "Richiesta non consentita"}, status_code=403)
+    return await call_next(request)
 api = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

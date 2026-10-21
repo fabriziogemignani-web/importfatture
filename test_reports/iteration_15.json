@@ -1,0 +1,28 @@
+{
+  "summary": "Security fixes retest (SEC-001/002/003) on the backend via the public URL plus a full browser flow. PASSED: 51 files -> 400 'Massimo 50 file per richiesta'; exactly 50 -> 200 with 50 results. A 101MB file plus a valid xml in the same request -> 'File troppo grande (max 100 MB)' for the big file only and the xml is imported (2.8s). 3-level ZIP nesting is imported; 4 levels -> 'Troppi archivi ZIP annidati'. A ZIP under 1MB holding a 25MB member -> 'File troppo grande (max 20 MB)' while the sibling member is imported; the backend stays responsive. 17x19MB members -> 'Archivio troppo grande: dividilo in più parti'. 5001 members -> the same error. A billion-laughs DOCTYPE/ENTITY -> 'XML non valido: dichiarazioni DTD/ENTITY non ammesse'. A UTF-16 billion-laughs gets past the byte regex, but expat 2.8.5 amplification protection rejects it (error result, no crash). CSV: '=HYPERLINK(..)', '+1+1', '@SUM(1)' and '-2+3' get an apostrophe prefix, as does a numero '-TEST_CSV4'; amounts 100,00/22,00/122,00 are unchanged and the DB value is not modified. The samples (xml, p7m, lotto.zip) import correctly. UI flow on the preview URL: login, upload of 4 files (results show the formula import, the nested-ZIP error, the DTD error and the lotto import), CSV download with the apostrophe-prefixed cell, admin company switch (to an empty company, 0 fatture), reload keeps the session, logout, and the protected route redirects to /login. FAILED: (1) a corrupt-CRC ZIP and an encrypted ZIP member -> HTTP 500. (2) The Set-Cookie seen on the public preview URL is 'SameSite=None; Partitioned'; the backend itself emits SameSite=lax (verified on :8001), so the preview ingress is rewriting the cookie.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/invoices/upload", "issue": "zf.read(info) in fattura_parser.extract_xml_files (line 77) is not wrapped in try/except. A ZIP with a bad CRC (also a ZIP whose declared file_size is a lie -> BadZipFile 'Bad CRC-32'), an encrypted member (RuntimeError 'password required') or an unsupported compression method (NotImplementedError) raises out of the generator -> 500 for the whole request. The user loses all per-file results, while invoices from earlier members are already stored. Repro: /app/backend/tests/zip_lying_size_repro.py and the tests test_encrypted_zip_member_no_500 / test_corrupt_crc_zip_no_500."},
+      {"endpoint": "Cookies (infra)", "issue": "Backend sets SameSite=lax; Secure; HttpOnly correctly, but on the preview domain the ingress rewrites it to 'SameSite=None; Partitioned'. The app is not at fault; production behaviour should be verified after deploy."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_security_iter15.py", "/app/backend/tests/upload_100mb_check.py", "/app/backend/tests/zip_lying_size_repro.py", "/app/test_reports/pytest/pytest_iter15.xml"],
+  "action_items": [
+    "In extract_xml_files wrap zf.read(info) in try/except (zipfile.BadZipFile, RuntimeError, NotImplementedError, zlib.error, EOFError, OSError) and yield (name, None, 'File danneggiato o protetto da password nell'archivio') then continue",
+    "Optionally add a generic per-file try/except in upload_invoices so one broken file can never 500 the whole batch"
+  ],
+  "critical_code_review_comments": [
+    "The budget double-counts: a nested ZIP's own file_size is added to budget.total and so are its members' sizes. This is conservative and harmless, but the effective limit for nested archives is below 300MB.",
+    "The DOCTYPE regex only scans the first 4096 bytes and is byte-based (UTF-16 bypasses it). It is currently safe because expat>=2.4 has amplification limits and ET does not resolve external entities. Consider defusedxml or decoding before the check for defense in depth.",
+    "There is no total request-size cap (50 files x 100MB = 5GB spooled to disk per request). Consider an ingress/body-size limit.",
+    "The frontend Upload.jsx batches 10 files per request, so the 50-file limit never affects the UI folder upload."
+  ],
+  "updated_files": ["/app/backend/tests/test_security_iter15.py", "/app/backend/tests/upload_100mb_check.py", "/app/backend/tests/zip_lying_size_repro.py"],
+  "success_rate": {"backend": "87% (13/15; the cookie failure is caused by the infra rewrite, the 2 ZIP 500s are real)", "frontend": "100%"},
+  "seed_data_creation": "Created companies 01234567890 and 09999999999 (TEST_) plus test invoices; all deleted at the end. DB now has only the admin user (0 companies, 0 invoices, 0 anagrafiche).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/test_security_iter15.py -n 0 -v (xdist is on by default in pytest.ini; use -n 0 because the module fixture creates and deletes the company). After the zf.read fix, the 2 ZIP tests should pass. The cookie test is xfail because of the preview ingress rewrite."
+}

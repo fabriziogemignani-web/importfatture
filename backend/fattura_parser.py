@@ -53,6 +53,13 @@ def _zip_members(zf: zipfile.ZipFile) -> Iterator[zipfile.ZipInfo]:
             yield info
 
 
+def _read_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> Optional[bytes]:
+    try:
+        return zf.read(info)
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, ValueError, OSError, EOFError):
+        return None
+
+
 def extract_xml_files(filename: str, data: bytes, depth: int = 0, budget: Optional[_Budget] = None) -> Iterator[tuple[str, Optional[bytes], Optional[str]]]:
     """Yields (name, xml_bytes or None, error or None)."""
     budget = budget or _Budget()
@@ -74,7 +81,11 @@ def extract_xml_files(filename: str, data: bytes, depth: int = 0, budget: Option
             if info.file_size > MAX_MEMBER_BYTES:
                 yield f"{filename}/{info.filename}", None, "File troppo grande (max 20 MB)"
                 continue
-            yield from extract_xml_files(f"{filename}/{info.filename}", zf.read(info), depth + 1, budget)
+            member = _read_member(zf, info)
+            if member is None:
+                yield f"{filename}/{info.filename}", None, "File dell'archivio illeggibile, corrotto o protetto da password"
+                continue
+            yield from extract_xml_files(f"{filename}/{info.filename}", member, depth + 1, budget)
         return
     if low.endswith(".p7m"):
         try:
