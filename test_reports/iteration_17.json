@@ -1,0 +1,18 @@
+{
+  "summary": "Backend-only retest of the zip-bomb fix (_read_member now streams in 64KB chunks with a limit of min(20MB, remaining budget)). The fix works. zip_lying_size_repro.py: 50MB member declaring 1000 bytes -> per-file error, peak 0.37MB (previously huge). Iter16 bomb case (407KB zip, 400MB deflate member declaring 1000 bytes in the local and central headers): tracemalloc peak in extract_xml_files is 0.35MB (old value 870MB). The result is the per-file error 'File dell'archivio illeggibile, corrotto o protetto da password' and the valid sibling is imported. Other lying-size variants: declared 19MB -> peak 21MB; a lying member inside a nested zip -> peak 0.5MB; a lying STORED member -> per-file error. Via the API, the bomb upload returns 200 with a per-file error and the sibling imported. /auth/me polled during the upload stayed 200, max latency 0.12s. 4 concurrent bomb uploads -> all 200, backend uvicorn RSS 154MB before and at peak, backend responsive afterwards. Honest 25MB member -> 'File troppo grande (max 20 MB)' and the sibling is imported (parser and API). 17x19MB -> 'Archivio troppo grande' with 15 members read. Corrupt CRC, encrypted, unsupported method 99 and truncated deflate -> per-file error each, and every valid sibling is imported. 3-level nested ZIP OK, 4 levels -> 'Troppi archivi ZIP annidati'. Samples (2 xml, p7m, lotto.zip with a nested p7m) import via the API; the duplicate p7m inside lotto is correctly flagged as a duplicate. Regression test_security_iter15 + test_csrf_zip_iter16 with -n0: 30 passed, 1 xfailed (known ingress SameSite rewrite). Frontend not tested, per the request (backend only).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_zip_stream_iter17.py", "/app/backend/tests/bomb_rss_check_iter17.py", "/app/backend/tests/zip_lying_size_repro.py", "/app/test_reports/pytest/pytest_results_iter17.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_read_member is correct. ZipExtFile.read(65536) bounds each decompress call, and the stream also stops at the declared file_size, which triggers the CRC check. So memory is bounded by the declared size (<=20MB, already prechecked) plus one chunk. The len(out) > limit branch is defense in depth.",
+    "The message for exceeding the budget limit in _read_member is always 'File troppo grande (max 20 MB)', even when the cause is the 300MB total budget. This is only cosmetic, and it is mostly unreachable because file_size is prechecked against remaining.",
+    "Unreadable members are still not logged server-side (carried over from iter16); consider logger.warning for ops visibility."
+  ],
+  "updated_files": ["/app/backend/tests/test_zip_stream_iter17.py (new)", "/app/backend/tests/bomb_rss_check_iter17.py (new, manual RSS check)"],
+  "success_rate": {"backend": "100% (14/14 new + 30/30 iter15/16 regression)", "frontend": "not tested (backend only)"},
+  "seed_data_creation": "TEST company 01234567890 and invoices were created during tests and removed. The DB now holds only the admin user, and the admin password is unchanged.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run pytest with -n0. test_zip_stream_iter17.py uses VAT 01234567890 (needed to match the samples), so do not run it in parallel with test_security_iter15.py. The bomb_rss_check_iter17.py script creates and deletes its own TEST company and measures uvicorn VmRSS."
+}
