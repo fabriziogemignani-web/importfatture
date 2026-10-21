@@ -40,6 +40,8 @@ const DOC_TYPES = {
 };
 const DOC_FALLBACK = "border-indigo-200 bg-indigo-50 text-indigo-700";
 
+export const docTypeLabel = (code) => (DOC_TYPES[(code || "").toUpperCase()] || ["Altro documento"])[0];
+
 export const DocTypeBadge = ({ code }) => {
   if (!code) return <span className="text-slate-400">—</span>;
   const [label, cls] = DOC_TYPES[code.toUpperCase()] || ["Altro documento", DOC_FALLBACK];

@@ -3,7 +3,8 @@ import { ArrowDownWideNarrow, ArrowUpNarrowWide, Download, Search } from "lucide
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader, Panel } from "@/components/common";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader, Panel, docTypeLabel } from "@/components/common";
 import { InvoiceTable } from "@/components/InvoiceTable";
 import { api, downloadFile, fmtEUR, formatApiError } from "@/lib/api";
 
@@ -26,6 +27,8 @@ export default function Invoices({ tipo }) {
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [order, setOrder] = useState("asc");
+  const [docType, setDocType] = useState("tutti");
+  const [docTypes, setDocTypes] = useState([]);
   const [page, setPage] = useState(1);
   const [data, setData] = useState({ items: [], total: 0, somma_totale: 0 });
   const [loading, setLoading] = useState(true);
@@ -33,6 +36,7 @@ export default function Invoices({ tipo }) {
   useEffect(() => {
     setAnno("tutti");
     setQ("");
+    setDocType("tutti");
     api.get("/invoices/years", { params: { tipo } }).then((r) => {
       setYears(r.data);
       if (r.data.length) setAnno(r.data[0]);
@@ -43,10 +47,13 @@ export default function Invoices({ tipo }) {
     return () => clearTimeout(t);
   }, [q]);
   useEffect(() => {
+    api.get("/invoices/doc-types", { params: { tipo, ...(anno !== "tutti" && { anno }) } }).then((r) => setDocTypes(r.data));
+  }, [tipo, anno]);
+  useEffect(() => {
     setPage(1);
-  }, [anno, debounced, order, tipo]);
+  }, [anno, debounced, order, tipo, docType]);
 
-  const params = { tipo, order, ...(anno !== "tutti" && { anno }), ...(debounced && { q: debounced }) };
+  const params = { tipo, order, ...(anno !== "tutti" && { anno }), ...(debounced && { q: debounced }), ...(docType !== "tutti" && { tipo_documento: docType }) };
   const key = JSON.stringify({ ...params, page });
   useEffect(() => {
     setLoading(true);
@@ -71,6 +78,18 @@ export default function Invoices({ tipo }) {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" placeholder="Cerca per numero, cliente/fornitore, P.IVA, descrizione…" data-testid="invoice-search-input" />
           </div>
+          <Select value={docType} onValueChange={setDocType}>
+            <SelectTrigger className="sm:w-64" data-testid="doc-type-filter"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tutti" data-testid="doc-type-option-tutti">Tutti i tipi documento</SelectItem>
+              {docType !== "tutti" && !docTypes.some((d) => d.code === docType) && (
+                <SelectItem value={docType}>{docType} · {docTypeLabel(docType)} (0)</SelectItem>
+              )}
+              {docTypes.map((d) => (
+                <SelectItem key={d.code} value={d.code} data-testid={`doc-type-option-${d.code}`}>{d.code} · {docTypeLabel(d.code)} ({d.n})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" onClick={() => setOrder(order === "asc" ? "desc" : "asc")} data-testid="sort-order-button">
             {order === "asc" ? <ArrowUpNarrowWide className="mr-2 h-4 w-4" /> : <ArrowDownWideNarrow className="mr-2 h-4 w-4" />}
             Protocollo {order === "asc" ? "crescente" : "decrescente"}

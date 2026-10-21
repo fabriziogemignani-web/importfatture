@@ -515,12 +515,14 @@ async def upload_invoices(files: List[UploadFile] = File(...), company_vat=Depen
 LIST_PROJECTION = {"xml": 0, "righe": 0, "riepilogo": 0, "pagamenti": 0, "trasmissione": 0}
 
 
-def build_query(vat, tipo, anno, q, anagrafica_id):
+def build_query(vat, tipo, anno, q, anagrafica_id, tipo_documento=None):
     query = {"company_vat": vat}
     if tipo:
         query["tipo"] = tipo
     if anno:
         query["anno"] = anno
+    if tipo_documento:
+        query["tipo_documento"] = tipo_documento.upper()
     if anagrafica_id:
         query["controparte_id"] = anagrafica_id
     if q and q.strip():
@@ -540,8 +542,8 @@ def sort_spec(order: str):
 @api.get("/invoices")
 async def list_invoices(tipo: Optional[str] = None, anno: Optional[int] = None, q: Optional[str] = None,
                         anagrafica_id: Optional[str] = None, order: str = "asc", page: int = 1, limit: int = 50,
-                        vat=Depends(get_tenant)):
-    query = build_query(vat, tipo, anno, q, anagrafica_id)
+                        tipo_documento: Optional[str] = None, vat=Depends(get_tenant)):
+    query = build_query(vat, tipo, anno, q, anagrafica_id, tipo_documento)
     total = await db.invoices.count_documents(query)
     limit = max(1, min(limit, 200))
     cursor = db.invoices.find(query, LIST_PROJECTION).sort(sort_spec(order)).skip((max(page, 1) - 1) * limit).limit(limit)
@@ -556,14 +558,25 @@ async def invoice_years(tipo: Optional[str] = None, vat=Depends(get_tenant)):
     return sorted(years, reverse=True)
 
 
+@api.get("/invoices/doc-types")
+async def invoice_doc_types(tipo: Optional[str] = None, anno: Optional[int] = None, vat=Depends(get_tenant)):
+    rows = await db.invoices.aggregate([
+        {"$match": build_query(vat, tipo, anno, None, None)},
+        {"$group": {"_id": "$tipo_documento", "n": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]).to_list(100)
+    return [{"code": r["_id"], "n": r["n"]} for r in rows if r["_id"]]
+
+
 def _fmt(n):
     return f"{n:.2f}".replace(".", ",")
 
 
 @api.get("/invoices/export")
 async def export_csv(tipo: Optional[str] = None, anno: Optional[int] = None, q: Optional[str] = None,
-                     anagrafica_id: Optional[str] = None, order: str = "asc", vat=Depends(get_tenant)):
-    query = build_query(vat, tipo, anno, q, anagrafica_id)
+                     anagrafica_id: Optional[str] = None, order: str = "asc", tipo_documento: Optional[str] = None,
+                     vat=Depends(get_tenant)):
+    query = build_query(vat, tipo, anno, q, anagrafica_id, tipo_documento)
     buf = io.StringIO()
     buf.write("\ufeff")
     w = csv.writer(buf, delimiter=";")

@@ -44,6 +44,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - CORS sicuro: con CORS_ORIGINS="*" le credenziali cross-origin sono disattivate (app same-origin); anagrafiche unite nascoste da lista e dettaglio
 - Code review 2: useMemo sui context, costanti grafico, try/else in store_invoice, root inizializzato nel parser
 - Elenco fatture: colonna "Tipo doc." con badge colorato (TD01 neutro, TD04 rosso, altri tipi colori diversi, tooltip con descrizione)
+- Filtro tipo documento in Fatture Attive/Passive (select con tipi presenti e conteggi, anche nell'export CSV); endpoint /api/invoices/doc-types
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
