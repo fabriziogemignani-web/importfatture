@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TipoBadge } from "@/components/common";
+import { DocTypeBadge, TipoBadge } from "@/components/common";
 import { fmtDate, fmtEUR } from "@/lib/api";
 
 export const InvoiceTable = ({ items, showTipo = false, loading = false }) => {
@@ -17,7 +17,7 @@ export const InvoiceTable = ({ items, showTipo = false, loading = false }) => {
             <TableHead className="font-mono text-[11px] uppercase">Data</TableHead>
             {showTipo && <TableHead className="font-mono text-[11px] uppercase">Tipo</TableHead>}
             <TableHead className="font-mono text-[11px] uppercase">Cliente / Fornitore</TableHead>
-            <TableHead className="font-mono text-[11px] uppercase">Doc.</TableHead>
+            <TableHead className="font-mono text-[11px] uppercase">Tipo doc.</TableHead>
             <TableHead className="text-right font-mono text-[11px] uppercase">Imponibile</TableHead>
             <TableHead className="text-right font-mono text-[11px] uppercase">Totale</TableHead>
           </TableRow>
@@ -33,7 +33,7 @@ export const InvoiceTable = ({ items, showTipo = false, loading = false }) => {
                 <div className="font-medium">{i.controparte_nome || "—"}</div>
                 <div className="font-mono text-xs text-slate-500">{i.controparte_piva}</div>
               </TableCell>
-              <TableCell className="font-mono text-xs">{i.tipo_documento}</TableCell>
+              <TableCell><DocTypeBadge code={i.tipo_documento} /></TableCell>
               <TableCell className="text-right tabular-nums text-slate-600">{fmtEUR(i.imponibile, i.divisa)}</TableCell>
               <TableCell className="text-right font-semibold tabular-nums">{fmtEUR(i.totale, i.divisa)}</TableCell>
             </TableRow>
