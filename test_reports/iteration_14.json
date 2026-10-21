@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only retest of the 3 fixes from iteration 13 in Invoices.jsx. Seeded 64 attive invoices for 01234567890 (2025: 57 TD01, 5 TD04, 1 TD05; 2026: 1 TD04). Page-reset race FIXED: starting from page 2, each change (doc type TD01, year tab Tutti, sort order, search by fill and by typing '15' with a keystroke delay) sent exactly ONE GET /api/invoices with page=1. The indicator showed '1 / 2' (or no pager when there was 1 page), and the rendered row ids were the same as the items in that response. Next/prev within the same filter works (2025: 50 rows then 13 rows, no overlap, prev goes back to the same page 1; TD01: 50 then 7). The '(0)' option now has data-testid doc-type-option-TD05 (TD05 chosen in 2025, then switching to 2026 shows 'TD05 · Nota di debito (0)' and the empty state). The count reads '1 fattura' (2026 and TD05 2025), '0 fatture', '5 fatture', '57 fatture' and '63 fatture'. Regression: CSV export with TD04 in 2025 has 5 rows, all TD04. Switching between Attive and Passive resets the doc type to 'Tutti i tipi documento' and clears the search.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/seed_paging_iter14.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LOW / cosmetic: the first load of a list (and switching tipo) still sends 3 GET /api/invoices: anno=tutti twice, then anno=<latest year> after /invoices/years returns. The alive flag throws away the stale responses, so what is shown is correct. Only one request would be needed if the data fetch waited for the years to load, or if the default year were taken from the years response before the first fetch.",
+    "The /invoices/years and /invoices/doc-types fetches still have no .catch (unhandled rejection if they fail). The doc-types effect also has no alive guard, so a fast year switch could briefly show the counts of the previous year."
+  ],
+  "updated_files": ["/app/backend/tests/seed_paging_iter14.py"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / FattureXML2026 (unchanged)",
+  "seed_data_creation": "TEST_A srl (01234567890), TEST_B srl (05555555555) and 64 invoices. All deleted at the end: companies 0, invoices 0, anagrafiche 0, only the admin user is left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "To seed: 'cd /app/backend/tests && python seed_paging_iter14.py'. To clean up: 'python seed_paging_iter14.py cleanup'. The default year tab is the latest year (2026, 1 invoice), so click year-tab-2025 to get 2 pages. Rows have data-testid invoice-row-<id>."
+}
