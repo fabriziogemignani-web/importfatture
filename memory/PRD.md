@@ -49,6 +49,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Upload: membri ZIP corrotti/cifrati -> errore per file (no 500); CSRF guard: header X-Requested-With obbligatorio su POST/PUT/PATCH/DELETE /api (axios lo invia sempre)
 - ZIP: lettura in streaming a blocchi da 64KB con limite reale (anti zip-bomb con file_size falsificato)
 - Export commercialista (/esporta): ZIP di XML attivi e passivi per periodo (preset mese/trimestre/anno o date libere), cartelle attive/ e passive/ + riepilogo.csv; endpoint GET /api/invoices/export-zip?dal&al&tipo; /api/invoices accetta dal/al
+- ATTENZIONE 2026-11-05: durante la pulizia dei dati di test sono stati cancellati per errore anche i dati reali caricati dall'utente nell'anteprima (circa 3.900 fatture, 241 anagrafiche, 4 P.IVA). Il database di produzione non è stato toccato. D'ora in poi i test cancellano solo i dati TEST_ che creano.
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA

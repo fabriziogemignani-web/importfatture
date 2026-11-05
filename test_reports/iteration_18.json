@@ -1,0 +1,26 @@
+{
+  "summary": "Tested the new 'Export commercialista' feature on backend and frontend. BACKEND: all 11 tests in test_export_zip_iter18.py pass (-n0). Covered: GET /api/invoices with dal/al, where both bounds are inclusive and a bad format returns 422. export-zip with both types returns attive/ + passive/ + riepilogo.csv, and the CSV rows match the files. Two invoices both named TEST_dup.xml become TEST_dup.xml and TEST_dup_2.xml. 'TEST fattura (è).xml' is sanitized to TEST_fattura____.xml. The p7m-origin file 'lotto.zip/IT05555555555_A0002.xml.p7m' is exported as passive/IT05555555555_A0002.xml with the plain XML content. tipo=passiva returns only passive/. A single-day period (dal=al) works. The CSV row count and total match /invoices total and somma_totale. Errors: 404 for an empty period, 422 for a bad date or a missing al or a bad tipo, 400 for dal>al, 401 without auth. Isolation: a user linked only to 07777777777 gets only their own invoice B1 (and 404 for a period with no invoices of their own); X-Company-Vat spoofing to 01234567890 returns 403; admin with X-Company-Vat 07777777777 is scoped correctly. Regression: upload (samples, lotto.zip, and the duplicate p7m flagged), the list and the CSV export all work. FRONTEND (Playwright, 1920x1080 + 390x844): the sidebar shows 'Export commercialista' and /esporta loads. The default preset is Mese scorso (2026-10-01..2026-10-31, system date 2026-11-05) and is highlighted. All 5 presets set the right dates, highlight correctly, and show counts and totals matching the seeded data and the API: Mese scorso A2/P1, Mese in corso P1, Trimestre scorso A1, Anno scorso A4 €3782, Anno in corso A3/P4. The download in the UI returns fatture_01234567890_2026-10-01_2026-10-31.zip with the expected 4 entries. With only Passive checked the ZIP holds passive/ + riepilogo. Unchecking both types disables the button (0). Clicking the label text toggles the checkbox. Reversed dates show export-date-error, the counts show '—' and the button is disabled. A period with 0 invoices disables the button. The mobile layout is fine. No bugs found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/esporta", "issues": ["Uses native <input type=date> (browser default picker, mm/dd/yyyy in an en-US browser) instead of a shadcn Calendar/Popover with an Italian dd/mm/yyyy format. This is cosmetic and consistent with the rest of the app."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_export_zip_iter18.py", "/app/test_reports/pytest/pytest_results_iter18.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "export_zip: zf.writestr and the CSV building run synchronously inside the async handler. For large periods (thousands of XMLs) this blocks the event loop while compressing. Consider building the zip in run_in_threadpool / asyncio.to_thread.",
+    "When one XML file contains several FatturaElettronicaBody elements, the same raw XML is stored on each invoice doc. The ZIP would then contain the identical file N times (file.xml, file_2.xml...). Consider deduplicating by filename+xml hash so the accountant does not receive duplicate SDI files.",
+    "The CSV export (/invoices/export) does not accept dal/al, though /invoices now does. This is optional, for consistency.",
+    "The frontend presets use the browser's local date (new Date()). This is fine for Italian users; just note that the 'Mese in corso' end date is 'today' in the browser's timezone.",
+    "The review note said the local DB is empty except admin, but it contains real companies (01428910457 Gamma Software Srl, 00919660118 Sitab Srl, 01192570453) with hundreds of invoices. Tests only read from them: one UI session defaulted to Gamma Software and only displayed counts, with no writes."
+  ],
+  "updated_files": ["/app/backend/tests/test_export_zip_iter18.py (new)"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100%"},
+  "seed_data_creation": "Created and then removed: TEST company 07777777777, test user test_iter18_userb@example.com, 6 generated invoices T1-T6 on 01234567890, invoice B1 on 07777777777, and their anagrafiche (removed when the invoices were deleted). NOT created by me and left in place: company 01234567890 'TEST_Mia' and its 5 sample invoices (10, 9, 100, FT/2, FT/11, created at 2026-11-05 16:26, before my run, by another actor) plus their 2 anagrafiche. I did not delete them because the rules forbid deleting by prefix data I did not create. The main agent should remove them if they are its own. Admin password unchanged.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run with: cd /app/backend/tests && pytest -n0 test_export_zip_iter18.py. KEEP_DATA=1 keeps the seeded data for UI tests; 'python test_export_zip_iter18.py cleanup' removes it (it tracks ids in /tmp/iter18_state.json). The dates in the tests are absolute (Oct 2026 etc.), while the UI presets depend on the system date (2026-11-05 during this run). The samples may already exist on 01234567890, and the test tolerates that. The DB holds real production-like companies, so never touch them."
+}
