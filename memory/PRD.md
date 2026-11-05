@@ -48,6 +48,7 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - Security audit fixes: limiti upload (50 file/richiesta, 100MB/file, ZIP max 3 livelli, 5000 file, 20MB/file, 300MB totali), DTD/ENTITY rifiutati, CSV anti formula-injection, cookie SameSite=Lax (anti-CSRF)
 - Upload: membri ZIP corrotti/cifrati -> errore per file (no 500); CSRF guard: header X-Requested-With obbligatorio su POST/PUT/PATCH/DELETE /api (axios lo invia sempre)
 - ZIP: lettura in streaming a blocchi da 64KB con limite reale (anti zip-bomb con file_size falsificato)
+- Export commercialista (/esporta): ZIP di XML attivi e passivi per periodo (preset mese/trimestre/anno o date libere), cartelle attive/ e passive/ + riepilogo.csv; endpoint GET /api/invoices/export-zip?dal&al&tipo; /api/invoices accetta dal/al
 
 ## Backlog
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA

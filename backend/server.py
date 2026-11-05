@@ -7,6 +7,8 @@ load_dotenv(ROOT_DIR / ".env")
 import csv
 import hashlib
 import io
+import tempfile
+import zipfile
 import secrets
 import os
 import re
@@ -17,7 +19,7 @@ from typing import Annotated, List, Optional
 import bcrypt
 import jwt
 from bson import ObjectId
-from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
@@ -533,12 +535,17 @@ async def upload_invoices(files: List[UploadFile] = File(...), company_vat=Depen
 LIST_PROJECTION = {"xml": 0, "righe": 0, "riepilogo": 0, "pagamenti": 0, "trasmissione": 0}
 
 
-def build_query(vat, tipo, anno, q, anagrafica_id, tipo_documento=None):
+DATE_RX = r"^\d{4}-\d{2}-\d{2}$"
+
+
+def build_query(vat, tipo, anno, q, anagrafica_id, tipo_documento=None, dal=None, al=None):
     query = {"company_vat": vat}
     if tipo:
         query["tipo"] = tipo
     if anno:
         query["anno"] = anno
+    if dal or al:
+        query["data"] = {**({"$gte": dal} if dal else {}), **({"$lte": al} if al else {})}
     if tipo_documento:
         query["tipo_documento"] = tipo_documento.upper()
     if anagrafica_id:
@@ -560,8 +567,9 @@ def sort_spec(order: str):
 @api.get("/invoices")
 async def list_invoices(tipo: Optional[str] = None, anno: Optional[int] = None, q: Optional[str] = None,
                         anagrafica_id: Optional[str] = None, order: str = "asc", page: int = 1, limit: int = 50,
-                        tipo_documento: Optional[str] = None, vat=Depends(get_tenant)):
-    query = build_query(vat, tipo, anno, q, anagrafica_id, tipo_documento)
+                        tipo_documento: Optional[str] = None, dal: Optional[str] = Query(None, pattern=DATE_RX),
+                        al: Optional[str] = Query(None, pattern=DATE_RX), vat=Depends(get_tenant)):
+    query = build_query(vat, tipo, anno, q, anagrafica_id, tipo_documento, dal, al)
     total = await db.invoices.count_documents(query)
     limit = max(1, min(limit, 200))
     cursor = db.invoices.find(query, LIST_PROJECTION).sort(sort_spec(order)).skip((max(page, 1) - 1) * limit).limit(limit)
@@ -595,6 +603,15 @@ def _safe(v) -> str:
     return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
 
 
+CSV_HEADER = ["Tipo", "Anno", "Numero", "Data", "Tipo documento", "Cliente/Fornitore", "P.IVA/CF", "Imponibile", "IVA", "Totale", "Divisa", "File"]
+
+
+def _csv_row(d: dict) -> list:
+    return [d["tipo"], d["anno"], _safe(d["numero"]), d["data"], _safe(d.get("tipo_documento")), _safe(d.get("controparte_nome")),
+            _safe(d.get("controparte_piva")), _fmt(d.get("imponibile", 0)), _fmt(d.get("imposta", 0)), _fmt(d.get("totale", 0)),
+            _safe(d.get("divisa")), _safe(d.get("filename"))]
+
+
 @api.get("/invoices/export")
 async def export_csv(tipo: Optional[str] = None, anno: Optional[int] = None, q: Optional[str] = None,
                      anagrafica_id: Optional[str] = None, order: str = "asc", tipo_documento: Optional[str] = None,
@@ -603,13 +620,56 @@ async def export_csv(tipo: Optional[str] = None, anno: Optional[int] = None, q: 
     buf = io.StringIO()
     buf.write("\ufeff")
     w = csv.writer(buf, delimiter=";")
-    w.writerow(["Tipo", "Anno", "Numero", "Data", "Tipo documento", "Cliente/Fornitore", "P.IVA/CF", "Imponibile", "IVA", "Totale", "Divisa", "File"])
+    w.writerow(CSV_HEADER)
     async for d in db.invoices.find(query, LIST_PROJECTION).sort(sort_spec(order)):
-        w.writerow([d["tipo"], d["anno"], _safe(d["numero"]), d["data"], _safe(d.get("tipo_documento")), _safe(d.get("controparte_nome")),
-                    _safe(d.get("controparte_piva")), _fmt(d.get("imponibile", 0)), _fmt(d.get("imposta", 0)), _fmt(d.get("totale", 0)),
-                    _safe(d.get("divisa")), _safe(d.get("filename"))])
+        w.writerow(_csv_row(d))
     name = f"fatture_{vat}_{tipo or 'tutte'}_{anno or 'tutti-anni'}.csv"
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+def _zip_name(d: dict, used: set) -> str:
+    base = re.sub(r"\.p7m$", "", (d.get("filename") or "").split("/")[-1], flags=re.I)
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base) or f"fattura_{d['numero']}"
+    if not base.lower().endswith(".xml"):
+        base += ".xml"
+    folder = "attive" if d["tipo"] == "attiva" else "passive"
+    name, i = f"{folder}/{base}", 1
+    while name in used:
+        i += 1
+        name = f"{folder}/{base[:-4]}_{i}.xml"
+    used.add(name)
+    return name
+
+
+@api.get("/invoices/export-zip")
+async def export_zip(dal: str = Query(..., pattern=DATE_RX), al: str = Query(..., pattern=DATE_RX),
+                     tipo: Optional[str] = Query(None, pattern="^(attiva|passiva)$"), vat=Depends(get_tenant)):
+    if dal > al:
+        raise HTTPException(400, "La data iniziale deve precedere quella finale")
+    query = build_query(vat, tipo, None, None, None, dal=dal, al=al)
+    if not await db.invoices.count_documents(query, limit=1):
+        raise HTTPException(404, "Nessuna fattura nel periodo selezionato")
+    tmp = tempfile.SpooledTemporaryFile(max_size=50 * 1024 * 1024)
+    used: set = set()
+    summary = io.StringIO()
+    summary.write("\ufeff")
+    w = csv.writer(summary, delimiter=";")
+    w.writerow(CSV_HEADER)
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+        async for d in db.invoices.find(query, {"righe": 0, "riepilogo": 0, "pagamenti": 0}).sort([("tipo", 1), ("data", 1), ("numero_key", 1)]):
+            zf.writestr(_zip_name(d, used), d.get("xml", ""))
+            w.writerow(_csv_row(d))
+        zf.writestr("riepilogo.csv", summary.getvalue())
+    tmp.seek(0)
+    name = f"fatture_{vat}_{dal}_{al}.zip"
+
+    def chunks():
+        with tmp:
+            while block := tmp.read(1024 * 1024):
+                yield block
+
+    return StreamingResponse(chunks(), media_type="application/zip",
                              headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 

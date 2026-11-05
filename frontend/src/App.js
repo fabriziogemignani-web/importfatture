@@ -10,6 +10,7 @@ import InvoiceDetail from "@/pages/InvoiceDetail";
 import Anagrafiche from "@/pages/Anagrafiche";
 import AnagraficaDetail from "@/pages/AnagraficaDetail";
 import Upload from "@/pages/Upload";
+import ExportCommercialista from "@/pages/ExportCommercialista";
 import Settings from "@/pages/Settings";
 import Users from "@/pages/Users";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -45,6 +46,7 @@ function App() {
             <Route path="/anagrafiche" element={<Anagrafiche />} />
             <Route path="/anagrafiche/:id" element={<AnagraficaDetail />} />
             <Route path="/carica" element={<Upload />} />
+            <Route path="/esporta" element={<ExportCommercialista />} />
             <Route path="/impostazioni" element={<Settings />} />
             <Route path="/utenti" element={<AdminOnly><Users /></AdminOnly>} />
           </Route>
