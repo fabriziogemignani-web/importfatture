@@ -12,6 +12,7 @@ import { LIVELLO_LABEL, PlafondBar } from "@/components/PlafondBar";
 import { api, fmtDate, fmtEUR, formatApiError } from "@/lib/api";
 
 const thisYear = new Date().getFullYear();
+const today = () => new Date().toISOString().slice(0, 10);
 const BADGE = { ok: "border-emerald-200 bg-emerald-50 text-emerald-700", attenzione: "border-amber-200 bg-amber-50 text-amber-800", superato: "border-red-300 bg-red-50 text-red-700" };
 
 const Stat = ({ label, value, accent, testid }) => (
@@ -28,7 +29,7 @@ const DichRow = ({ d, onOpen, onEdit, onDelete }) => (
     <td className="w-64 px-4 py-3"><PlafondBar d={d} compact /></td>
     <td className="px-4 py-3 text-right tabular-nums">{fmtEUR(d.residuo)}</td>
     <td className="px-4 py-3">
-      <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${BADGE[d.livello]}`} data-testid={`dich-livello-${d.id}`}>{d.data_revoca ? "Revocata" : LIVELLO_LABEL[d.livello]}</span>
+      <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${BADGE[d.livello]}`} data-testid={`dich-livello-${d.id}`}>{d.data_revoca && d.data_revoca <= today() ? "Revocata" : LIVELLO_LABEL[d.livello]}</span>
     </td>
     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
       <Button size="icon" variant="ghost" onClick={() => onEdit(d)} data-testid={`dich-edit-${d.id}`}><Pencil className="h-4 w-4" /></Button>
@@ -87,9 +88,13 @@ export default function Dichiarazioni() {
 
   const remove = async (d) => {
     if (!window.confirm(`Eliminare la dichiarazione ${d.protocollo}?`)) return;
-    await api.delete(`/dichiarazioni/${d.id}`);
-    toast.success("Dichiarazione eliminata");
-    load();
+    try {
+      await api.delete(`/dichiarazioni/${d.id}`);
+      toast.success("Dichiarazione eliminata");
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
   };
   const list = data?.dichiarazioni || [];
   const anomalie = data?.anomalie || [];

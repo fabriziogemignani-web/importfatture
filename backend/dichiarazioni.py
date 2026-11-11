@@ -45,6 +45,10 @@ def livello(perc: float) -> str:
     return "attenzione" if perc >= 80 else "ok"
 
 
+def _eur(n: float) -> str:
+    return f"{n:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def _sign(d: dict) -> int:
     return -1 if (d.get("tipo_documento") or "").upper() == "TD04" else 1
 
@@ -121,7 +125,7 @@ def build_router(db, get_tenant, norm_vat) -> APIRouter:
             for ref in d["intenti"]:
                 decl = by_key.get(prot_key(ref["protocollo"]))
                 _check_invoice(d, ref, decl, anomalies)
-                if decl:
+                if decl and int(d["data"][:4]) == decl["anno"]:
                     usage[str(decl["_id"])].append((d, round(_sign(d) * ref["importo"], 2)))
         out = []
         for x in decls:
@@ -131,7 +135,7 @@ def build_router(db, get_tenant, norm_vat) -> APIRouter:
                 fatture.append({**_inv_ref(d, imp), "progressivo": run})
                 if imp > 0 and run > x["plafond"] + 0.005:
                     anomalies.append({**_inv_ref(d, imp), "codice": "plafond_superato", "protocollo": x["protocollo"],
-                                      "messaggio": f"Plafond superato di {run - x['plafond']:.2f} €"})
+                                      "messaggio": f"Plafond superato di {_eur(run - x['plafond'])}"})
             perc = round(run / x["plafond"] * 100, 1)
             out.append({**_public(x), "utilizzato": run, "residuo": round(x["plafond"] - run, 2), "percentuale": perc,
                         "livello": livello(perc), "n_fatture": len(fatture), "fatture": fatture})

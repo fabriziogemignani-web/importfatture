@@ -1,0 +1,42 @@
+{
+  "summary": "Dichiarazioni d'intento / plafond feature tested end-to-end. Backend: 10/10 pytest pass (CRUD, protocol normalization 23-digit and '/', invalid->400, duplicate->400 incl. '/' vs '-' variant, plafond<=0 ->422, revoca<data ->400, CSRF 403, usage/residuo/percentuale/livello ok/attenzione(80% exact)/superato, TD04 subtraction (seed 09999999001 = 11000 superato, 2 anomalies), all 9 anomaly codes reproduced with crafted XMLs, anno filter on anomalies, detail progressivo, riepilogo, PDF upload/download/delete/validation (non-PDF, >5MB, bad kind 404), tenant isolation on GET/PUT/DELETE/file). Frontend: dashboard plafond-alert shows and links to /dichiarazioni; stats, year tabs, list/anomalie tabs, create via dialog (cliente prefill, invalid protocol toast, '/'-protocol normalized, comma decimal plafond), edit, detail sheet with PlafondBar + invoice list with TD04 negative, PDF upload/download/replace/delete, bad PDF toast, delete with confirm - all working. Mobile 390px: no page horizontal overflow, dialog and sheet usable.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/companies/{vat}", "issue": "Company deletion only blocks on invoices/users; dichiarazioni and dichiarazioni_files of that P.IVA are left orphaned (reproduced: company 09999999002 deleted with 1 declaration still in db, cleaned manually by me). Should block or cascade-delete dichiarazioni + files."},
+      {"endpoint": "GET /api/dichiarazioni (compute)", "issue": "Invoices flagged fuori_periodo (other year or before ricevuta), revocata and cliente_diverso still erode the declaration's plafond (e.g. a 2025 invoice citing a 2026 protocol counted in 2026 utilizzato). Business decision: probably exclude at least other-year invoices from utilizzato, or document it."},
+      {"endpoint": "plafond_superato message", "issue": "Message uses non-Italian number format 'Plafond superato di 2000.00 €' (rest of UI uses 2.000,00 €)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Dichiarazioni remove() / DichiarazioneDetail Allegato remove()", "issue": "api.delete calls without try/catch -> unhandled promise rejection and no error toast on failure", "selector": "dich-delete-{id}, dich-file-delete-{kind}", "priority": "LOW"},
+      {"component": "DichRow status badge", "issue": "If data_revoca is set the badge always shows 'Revocata' (even for future revoca date) and hides 'Plafond superato'/'In esaurimento' state", "selector": "dich-livello-{id}", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "DichiarazioneDialog", "issues": ["dich-data and dich-data-revoca use native browser date pickers (type=date) instead of shadcn Calendar/Popover", "On edit plafond shows '5000.5' (dot) while user typed '5000,50'"]},
+      {"screen": "DichiarazioneDetail (mobile 390px)", "issues": ["Fatture table wrapper is overflow-hidden: 'Progressivo' column clipped on mobile; use overflow-x-auto"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_dichiarazioni_iter19.py", "/app/test_reports/pytest/iter19.xml"],
+  "action_items": [
+    "Make DELETE /api/companies/{vat} also check/cascade dichiarazioni + dichiarazioni_files",
+    "Decide whether fuori_periodo/revocata/cliente_diverso invoices should count toward utilizzato (at least exclude invoices of another year)",
+    "Format plafond_superato amount in Italian locale",
+    "Wrap delete calls in try/catch with toast",
+    "Replace native date inputs with shadcn Calendar; overflow-x-auto for detail invoice table"
+  ],
+  "critical_code_review_comments": [
+    "compute() runs backfill + full scan of all N3.5 invoices on every list/detail/riepilogo call (Dashboard calls riepilogo each load) - fine for MVP, may be slow for big archives",
+    "detail() recomputes all declarations to return one",
+    "download_pdf does not validate did is ObjectId/declaration exists (scoped by company_vat, so no leak)",
+    "anomalia testid anomalia-{codice}-{invoice_id} can duplicate when an invoice has 2 refs with same code"
+  ],
+  "updated_files": ["/app/backend/tests/test_dichiarazioni_iter19.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% core flows"},
+  "seed_data_creation": "Test creates company 09999999002 + 11 TEST invoices + declarations and deletes them all in teardown (verified 0 leftovers). UI test created protocol 26019900000000001-000077 in 09999999001 and deleted it via UI. Main agent's 09999999001 data untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest -n0 -p no:randomly test_dichiarazioni_iter19.py. conftest.py auto-adds X-Requested-With to every requests.Session (pop it to test CSRF). Company 09999999001 belongs to main agent."
+}

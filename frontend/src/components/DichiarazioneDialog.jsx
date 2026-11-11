@@ -31,7 +31,7 @@ export const DichiarazioneDialog = ({ open, onOpenChange, initial, onSaved }) =>
   const clienti = useClienti(open);
   useEffect(() => {
     if (open) {
-      setF(initial ? { ...EMPTY, ...initial, data_revoca: initial.data_revoca || "" } : EMPTY);
+      setF(initial ? { ...EMPTY, ...initial, plafond: String(initial.plafond).replace(".", ","), data_revoca: initial.data_revoca || "" } : EMPTY);
     }
   }, [open, initial]);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));

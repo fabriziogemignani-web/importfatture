@@ -408,8 +408,9 @@ async def rename_company(vat: str, body: SettingsIn, admin=Depends(require_admin
 @api.delete("/companies/{vat}")
 async def delete_company(vat: str, admin=Depends(require_admin)):
     vat = norm_vat(vat)
-    if await db.invoices.count_documents({"company_vat": vat}, limit=1) or await db.users.count_documents({"company_vats": vat}, limit=1):
-        raise HTTPException(400, "Impossibile eliminare: ci sono fatture o utenti collegati a questa P.IVA")
+    if await db.invoices.count_documents({"company_vat": vat}, limit=1) or await db.users.count_documents({"company_vats": vat}, limit=1) \
+            or await db.dichiarazioni.count_documents({"company_vat": vat}, limit=1):
+        raise HTTPException(400, "Impossibile eliminare: ci sono fatture, utenti o dichiarazioni d'intento collegati a questa P.IVA")
     res = await db.companies.delete_one({"_id": vat})
     if not res.deleted_count:
         raise HTTPException(404, "P.IVA non trovata")

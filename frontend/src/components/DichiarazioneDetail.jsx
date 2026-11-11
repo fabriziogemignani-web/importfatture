@@ -28,8 +28,12 @@ const Allegato = ({ d, kind, label, onChange }) => {
     }
   };
   const remove = async () => {
-    await api.delete(`/dichiarazioni/${d.id}/files/${kind}`);
-    onChange();
+    try {
+      await api.delete(`/dichiarazioni/${d.id}/files/${kind}`);
+      onChange();
+    } catch (err) {
+      toast.error(formatApiError(err));
+    }
   };
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3" data-testid={`dich-file-${kind}`}>
@@ -48,8 +52,8 @@ const Allegato = ({ d, kind, label, onChange }) => {
 };
 
 const FattureList = ({ fatture }) => (
-  <div className="overflow-hidden rounded-lg border border-slate-200">
-    <table className="w-full text-sm">
+  <div className="overflow-x-auto rounded-lg border border-slate-200">
+    <table className="w-full min-w-[420px] text-sm">
       <thead className="bg-slate-50 text-left text-xs text-slate-500">
         <tr><th className="px-3 py-2">Fattura</th><th className="px-3 py-2">Tipo</th><th className="px-3 py-2 text-right">Importo</th><th className="px-3 py-2 text-right">Progressivo</th></tr>
       </thead>

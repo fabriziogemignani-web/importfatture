@@ -50,8 +50,10 @@ User choices: P.IVA aziendale in impostazioni (cedente = azienda -> attiva, altr
 - ZIP: lettura in streaming a blocchi da 64KB con limite reale (anti zip-bomb con file_size falsificato)
 - Export commercialista (/esporta): ZIP di XML attivi e passivi per periodo (preset mese/trimestre/anno o date libere), cartelle attive/ e passive/ + riepilogo.csv; endpoint GET /api/invoices/export-zip?dal&al&tipo; /api/invoices accetta dal/al
 - ATTENZIONE 2026-11-05: durante la pulizia dei dati di test sono stati cancellati per errore anche i dati reali caricati dall'utente nell'anteprima (circa 3.900 fatture, 241 anagrafiche, 4 P.IVA). Il database di produzione non è stato toccato. D'ora in poi i test cancellano solo i dati TEST_ che creano.
+- 2026-11-11 Dichiarazioni d'intento (/dichiarazioni): registrazione manuale (cliente, protocollo 17-6 cifre normalizzato, data ricevuta, anno, plafond, revoca, note) + PDF dichiarazione/ricevuta (max 5MB, in Mongo dichiarazioni_files); utilizzo plafond automatico da fatture attive N3.5 con AltriDatiGestionali TipoDato=INTENTO (TD04 sottrae, solo fatture dell'anno della dichiarazione); livelli ok/attenzione ≥80%/superato; fatture irregolari (senza protocollo, non registrata, protocollo non valido, cliente diverso, fuori periodo, revocata, data diversa, natura errata, plafond superato); avviso in Dashboard; backend in backend/dichiarazioni.py; P.IVA con dichiarazioni non eliminabile
 
 ## Backlog
+- P2: Email automatica all'admin quando una dichiarazione supera l'80%/100%
 - P1: Riclassificazione fatture già caricate se cambia la P.IVA
 - P1: Gestione utenti aggiuntivi da admin
 - P2: Filtri per data/tipo documento, export PDF stile AdE, scadenzario pagamenti
