@@ -29,6 +29,7 @@ from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from fattura_parser import extract_xml_files, parse_fattura
 from email_service import reset_email_html, send_email
+import dichiarazioni
 
 client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = client[os.environ["DB_NAME"]]
@@ -782,6 +783,7 @@ async def stats(anno: Optional[int] = None, vat=Depends(get_tenant)):
     return {"per_tipo": per_tipo, "mensile": months, "recenti": recent, "n_clienti": n_clienti, "n_fornitori": n_fornitori}
 
 
+api.include_router(dichiarazioni.build_router(db, get_tenant, norm_vat))
 app.include_router(api)
 
 CORS_ORIGINS = [o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()]
@@ -823,6 +825,7 @@ async def startup():
     if "company_vat_1" in await db.users.index_information():
         await db.users.drop_index("company_vat_1")
     await db.users.create_index("company_vats")
+    await dichiarazioni.ensure_indexes(db)
     email = os.environ["ADMIN_EMAIL"].lower()
     pwd = os.environ["ADMIN_PASSWORD"]
     existing = await db.users.find_one({"email": email})

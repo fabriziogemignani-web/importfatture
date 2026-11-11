@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutGrid, ArrowUpRight, ArrowDownLeft, Users, UploadCloud, Settings, LogOut, Menu, X, FileText, UserCog, Building2, Archive } from "lucide-react";
+import { LayoutGrid, ArrowUpRight, ArrowDownLeft, Users, UploadCloud, Settings, LogOut, Menu, X, FileText, UserCog, Building2, Archive, FileSignature } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
 import { CompanyProvider, useCompany } from "@/context/CompanyContext";
@@ -10,6 +10,7 @@ const NAV = [
   { to: "/attive", label: "Fatture Attive", icon: ArrowUpRight, id: "attive" },
   { to: "/passive", label: "Fatture Passive", icon: ArrowDownLeft, id: "passive" },
   { to: "/anagrafiche", label: "Anagrafiche", icon: Users, id: "anagrafiche" },
+  { to: "/dichiarazioni", label: "Dichiarazioni d'intento", icon: FileSignature, id: "dichiarazioni" },
   { to: "/carica", label: "Caricamento", icon: UploadCloud, id: "carica" },
   { to: "/esporta", label: "Export commercialista", icon: Archive, id: "esporta" },
   { to: "/impostazioni", label: "Impostazioni", icon: Settings, id: "impostazioni" },

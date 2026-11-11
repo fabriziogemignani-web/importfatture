@@ -226,6 +226,25 @@ def _parse_pagamenti(body: Element) -> list[dict]:
     ]
 
 
+def parse_intenti(body: Element, riepilogo: list[dict]) -> tuple[float, list[dict]]:
+    n35 = round(sum(r["imponibile"] for r in riepilogo if r["natura"].upper() == "N3.5"), 2)
+    refs: dict[str, dict] = {}
+    for line in body.findall("DatiBeniServizi/DettaglioLinee"):
+        for adg in line.findall("AltriDatiGestionali"):
+            if _t(adg, "TipoDato").upper() != "INTENTO":
+                continue
+            prot = re.sub(r"\s", "", _t(adg, "RiferimentoTesto"))
+            ref = refs.setdefault(prot, {"protocollo": prot, "data": _t(adg, "RiferimentoData")[:10], "importo": 0.0})
+            if _t(line, "Natura").upper() == "N3.5":
+                ref["importo"] += _num(_t(line, "PrezzoTotale"))
+    intenti = list(refs.values())
+    if len(intenti) == 1:
+        intenti[0]["importo"] = n35
+    for r in intenti:
+        r["importo"] = round(r["importo"], 2)
+    return n35, intenti
+
+
 def _parse_body(body: Element) -> dict:
     dgd = body.find("DatiGenerali/DatiGeneraliDocumento")
     numero, data = _t(dgd, "Numero"), _t(dgd, "Data")
@@ -235,7 +254,11 @@ def _parse_body(body: Element) -> dict:
     imponibile = round(sum(r["imponibile"] for r in riepilogo), 2)
     imposta = round(sum(r["imposta"] for r in riepilogo), 2)
     totale_doc = _t(dgd, "ImportoTotaleDocumento")
+    n35, intenti = parse_intenti(body, riepilogo)
     return {
+        "n35": n35,
+        "intenti": intenti,
+        "intenti_v": 1,
         "numero": numero,
         "numero_key": natural_key(numero),
         "data": data,

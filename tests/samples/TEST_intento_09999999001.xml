@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPR12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione><IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>09999999001</IdCodice></IdTrasmittente><ProgressivoInvio>00001</ProgressivoInvio><FormatoTrasmissione>FPR12</FormatoTrasmissione><CodiceDestinatario>0000000</CodiceDestinatario></DatiTrasmissione>
+    <CedentePrestatore><DatiAnagrafici><IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>09999999001</IdCodice></IdFiscaleIVA><Anagrafica><Denominazione>TEST Fornitore Srl</Denominazione></Anagrafica><RegimeFiscale>RF01</RegimeFiscale></DatiAnagrafici><Sede><Indirizzo>Via Test 1</Indirizzo><CAP>00100</CAP><Comune>Roma</Comune><Nazione>IT</Nazione></Sede></CedentePrestatore>
+    <CessionarioCommittente><DatiAnagrafici><IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>09999999777</IdCodice></IdFiscaleIVA><Anagrafica><Denominazione>TEST Esportatore Spa</Denominazione></Anagrafica></DatiAnagrafici><Sede><Indirizzo>Via Export 2</Indirizzo><CAP>20100</CAP><Comune>Milano</Comune><Nazione>IT</Nazione></Sede></CessionarioCommittente>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa><Data>2026-03-10</Data><Numero>INT-1</Numero><ImportoTotaleDocumento>8000.00</ImportoTotaleDocumento></DatiGeneraliDocumento></DatiGenerali>
+    <DatiBeniServizi>
+      <DettaglioLinee><NumeroLinea>1</NumeroLinea><Descrizione>Merce</Descrizione><PrezzoUnitario>8000.00</PrezzoUnitario><PrezzoTotale>8000.00</PrezzoTotale><AliquotaIVA>0.00</AliquotaIVA><Natura>N3.5</Natura>
+        <AltriDatiGestionali><TipoDato>INTENTO</TipoDato><RiferimentoTesto>26010312345678901-000001</RiferimentoTesto><RiferimentoData>2026-01-15</RiferimentoData></AltriDatiGestionali>
+      </DettaglioLinee>
+      <DatiRiepilogo><AliquotaIVA>0.00</AliquotaIVA><Natura>N3.5</Natura><ImponibileImporto>8000.00</ImponibileImporto><Imposta>0.00</Imposta><RiferimentoNormativo>Art. 8 c.1 lett. c DPR 633/72</RiferimentoNormativo></DatiRiepilogo>
+    </DatiBeniServizi>
+  </FatturaElettronicaBody>
+  <FatturaElettronicaBody>
+    <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa><Data>2026-04-02</Data><Numero>INT-2</Numero><ImportoTotaleDocumento>3000.00</ImportoTotaleDocumento></DatiGeneraliDocumento></DatiGenerali>
+    <DatiBeniServizi>
+      <DettaglioLinee><NumeroLinea>1</NumeroLinea><Descrizione>Merce senza protocollo</Descrizione><PrezzoUnitario>3000.00</PrezzoUnitario><PrezzoTotale>3000.00</PrezzoTotale><AliquotaIVA>0.00</AliquotaIVA><Natura>N3.5</Natura></DettaglioLinee>
+      <DatiRiepilogo><AliquotaIVA>0.00</AliquotaIVA><Natura>N3.5</Natura><ImponibileImporto>3000.00</ImponibileImporto><Imposta>0.00</Imposta></DatiRiepilogo>
+    </DatiBeniServizi>
+  </FatturaElettronicaBody>
+  <FatturaElettronicaBody>
+    <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa><Data>2026-05-02</Data><Numero>INT-3</Numero><ImportoTotaleDocumento>4000.00</ImportoTotaleDocumento></DatiGeneraliDocumento></DatiGenerali>
+    <DatiBeniServizi>
+      <DettaglioLinee><NumeroLinea>1</NumeroLinea><Descrizione>Merce</Descrizione><PrezzoUnitario>4000.00</PrezzoUnitario><PrezzoTotale>4000.00</PrezzoTotale><AliquotaIVA>0.00</AliquotaIVA><Natura>N3.5</Natura>
+        <AltriDatiGestionali><TipoDato>INTENTO</TipoDato><RiferimentoTesto>26010312345678901-000001</RiferimentoTesto><RiferimentoData>2026-01-15</RiferimentoData></AltriDatiGestionali>
+      </DettaglioLinee>
+      <DatiRiepilogo><AliquotaIVA>0.00</AliquotaIVA><Natura>N3.5</Natura><ImponibileImporto>4000.00</ImponibileImporto><Imposta>0.00</Imposta></DatiRiepilogo>
+    </DatiBeniServizi>
+  </FatturaElettronicaBody>
+  <FatturaElettronicaBody>
+    <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>TD04</TipoDocumento><Divisa>EUR</Divisa><Data>2026-05-20</Data><Numero>NC-1</Numero><ImportoTotaleDocumento>1000.00</ImportoTotaleDocumento></DatiGeneraliDocumento></DatiGenerali>
+    <DatiBeniServizi>
+      <DettaglioLinee><NumeroLinea>1</NumeroLinea><Descrizione>Reso</Descrizione><PrezzoUnitario>1000.00</PrezzoUnitario><PrezzoTotale>1000.00</PrezzoTotale><AliquotaIVA>0.00</AliquotaIVA><Natura>N3.5</Natura>
+        <AltriDatiGestionali><TipoDato>INTENTO</TipoDato><RiferimentoTesto>26010312345678901-000001</RiferimentoTesto><RiferimentoData>2026-01-15</RiferimentoData></AltriDatiGestionali>
+      </DettaglioLinee>
+      <DatiRiepilogo><AliquotaIVA>0.00</AliquotaIVA><Natura>N3.5</Natura><ImponibileImporto>1000.00</ImponibileImporto><Imposta>0.00</Imposta></DatiRiepilogo>
+    </DatiBeniServizi>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>

@@ -5,6 +5,7 @@ import { UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader, Panel } from "@/components/common";
+import { PlafondAlert } from "@/components/PlafondAlert";
 import { api, fmtEUR } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 
@@ -51,6 +52,7 @@ export default function Dashboard() {
         </Select>
         <Button asChild data-testid="dashboard-upload-button"><Link to="/carica"><UploadCloud className="mr-2 h-4 w-4" />Carica fatture</Link></Button>
       </PageHeader>
+      <PlafondAlert />
       <div className="fade-up grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat testid="stat-attive" label="Fatture attive" value={fmtEUR(a.totale)} sub={`${a.n} documenti · IVA ${fmtEUR(a.imposta)}`} accent="text-emerald-700" />
         <Stat testid="stat-passive" label="Fatture passive" value={fmtEUR(p.totale)} sub={`${p.n} documenti · IVA ${fmtEUR(p.imposta)}`} accent="text-indigo-700" />
